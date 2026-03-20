@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LicitaHub - Central de Licitações (Com Radar)</title>
     
+    <!-- BASE DE USUÁRIOS EMBUTIDA — Atualizada pelo botão "Salvar index.html" -->
+    <script>
+        window.EMBEDDED_USERS = [
+            { id: 'admin-master', username: 'andre.philipe', password: 'masterclass', role: 'master', expirationDate: '2099-12-31' }
+        ];
+    </script>
+
     <!-- Google Fonts: Lora (Fonte estilo E-book) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -625,26 +632,13 @@ const parts = text.split(regex);
                 setLoading(true); setErr('');
                 await new Promise(r => setTimeout(r, 600)); 
                 
-               // Busca de usuários híbrida: Memória (Cliente) ou LocalStorage (Master)
-                // Injetando o acesso Master do Andre Philipe
-                let users = [
-                    { 
-                        id: 'admin-master', 
-                        username: 'andre.philipe', 
-                        password: 'masterclass', 
-                        role: 'master', 
-                        expirationDate: '2099-12-31' 
-                    }
-                ];
+               // Fonte única de verdade: EMBEDDED_USERS (embutido no arquivo) + localStorage (sessão local)
+                let users = window.EMBEDDED_USERS || [];
                 try {
                     const localData = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
-                    const memoryData = window.EMBEDDED_USERS || [];
-                    // Adiciona o Andre à lista de usuários permitidos
-                    const combined = [...users, ...memoryData, ...localData];
+                    const combined = [...users, ...localData];
                     users = Array.from(new Map(combined.map(u => [u.username, u])).values());
-                } catch(e) { 
-                    users = users; // Mantém pelo menos o Andre se o storage falhar
-                }
+                } catch(e) { /* mantém EMBEDDED_USERS se storage falhar */ }
 
           // Procura quem está tentando logar (ignorando espaços vazios e maiúsculas/minúsculas)
                 const foundUser = users.find(u => u.username.toLowerCase() === user.trim().toLowerCase() && u.password === pass.trim());
@@ -726,97 +720,83 @@ const parts = text.split(regex);
             const [newPassword, setNewPassword] = useState('');
             const [newExpiration, setNewExpiration] = useState('');
 
+            const getAllUsers = () => {
+                const embedded = window.EMBEDDED_USERS || [];
+                const local = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                const combined = [...embedded, ...local];
+                return Array.from(new Map(combined.map(u => [u.username, u])).values());
+            };
+
             const handleCreateUser = (e) => {
                 e.preventDefault();
                 if (!newUsername || !newPassword || !newExpiration) return;
-                
-              const users = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
-                if (users.some(u => u.username === newUsername)) {
-                    alert("Esse nome de usuário já existe!");
+
+                const allUsers = getAllUsers();
+                if (allUsers.some(u => u.username === newUsername.trim())) {
+                    toast({ title: 'Usuário já existe!', description: 'Escolha outro nome de usuário.', variant: 'destructive' });
                     return;
                 }
-                
-                users.push({ id: Date.now(), username: newUsername, password: newPassword, role: 'common', expirationDate: newExpiration });
-                
-                // CÓDIGO INJETADO: Comando vital que salva o usuário de fato no sistema
-                localStorage.setItem('licitahub-users', JSON.stringify(users));
 
-                setNewUsername(''); setNewPassword(''); setNewExpiration(''); setShowUserAdmin(false);
-                alert("Usuário com licença criada com sucesso!");
+                const novoUser = { id: Date.now(), username: newUsername.trim(), password: newPassword.trim(), role: 'common', expirationDate: newExpiration };
+
+                // Salva no EMBEDDED_USERS em memória (persiste ao salvar o index.html)
+                window.EMBEDDED_USERS = [...(window.EMBEDDED_USERS || []), novoUser];
+                // Também salva no localStorage para a sessão atual
+                const localUsers = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                localStorage.setItem('licitahub-users', JSON.stringify([...localUsers, novoUser]));
+
+                setNewUsername(''); setNewPassword(''); setNewExpiration('');
+                toast({ title: 'Usuário criado!', description: `"${novoUser.username}" adicionado. Clique em "Salvar index.html" para fixar no arquivo.`, variant: 'success' });
             };
 
-        // Função Disruptiva: Exportar HTML Blindado com Banco Injetado e Master Consolidado
-            const exportBlindedHTML = () => {
+            const handleDeleteUser = (username) => {
+                if (!window.confirm(`Remover o usuário "${username}"?`)) return;
+                // Remove do EMBEDDED_USERS em memória
+                window.EMBEDDED_USERS = (window.EMBEDDED_USERS || []).filter(u => u.username !== username);
+                // Remove do localStorage
+                const local = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                localStorage.setItem('licitahub-users', JSON.stringify(local.filter(u => u.username !== username)));
+                toast({ title: 'Usuário removido', description: `Clique em "Salvar index.html" para confirmar.`, variant: 'success' });
+            };
+
+        // Salva o index.html com todos os usuários embutidos — sem ofuscação, limpo e direto
+            const saveUpdatedHTML = () => {
+                const allUsers = getAllUsers();
+
                 const docClone = document.cloneNode(true);
+                // Limpa o root para não exportar estado da UI
                 const rootDiv = docClone.getElementById('root');
-                if(rootDiv) rootDiv.innerHTML = ''; 
-                
-                // 1. Coleta TODOS os usuários
-                const localUsers = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
-                const embeddedUsers = window.EMBEDDED_USERS || [];
-                const masterUser = [{ id: 'admin-master', username: 'andre.philipe', password: 'masterclass', role: 'master', expirationDate: '2099-12-31' }];
-                
-                // 2. Remove duplicatas
-                const combined = [...masterUser, ...embeddedUsers, ...localUsers];
-                const uniqueUsers = Array.from(new Map(combined.map(u => [u.username, u])).values());
-                const allUsersToExport = JSON.stringify(uniqueUsers);
-                
-                // DEV SENIOR: Faxina no código! Removemos o lixo do Babel (Evita vazamento de código na tela)
+                if (rootDiv) rootDiv.innerHTML = '';
+
+                // Atualiza o script de EMBEDDED_USERS no clone
                 const scripts = docClone.getElementsByTagName('script');
-                for (let i = scripts.length - 1; i >= 0; i--) {
-                    const s = scripts[i];
-                    if (!s.src && s.type !== 'text/babel') {
-                        s.parentNode.removeChild(s);
+                let updated = false;
+                for (let i = 0; i < scripts.length; i++) {
+                    if (scripts[i].textContent.includes('window.EMBEDDED_USERS')) {
+                        scripts[i].textContent = `\n        window.EMBEDDED_USERS = ${JSON.stringify(allUsers, null, 8)};\n    `;
+                        updated = true;
+                        break;
                     }
                 }
+                if (!updated) {
+                    // Fallback: injeta no início do head se não encontrar
+                    const s = docClone.createElement('script');
+                    s.textContent = `window.EMBEDDED_USERS = ${JSON.stringify(allUsers)};`;
+                    docClone.head.insertBefore(s, docClone.head.firstChild);
+                }
 
-                // 3. Injeção de Segurança
-                const dbScript = docClone.createElement('script');
-                dbScript.textContent = `window.EMBEDDED_USERS = ${allUsersToExport};`;
-                docClone.head.insertBefore(dbScript, docClone.head.firstChild);
-
-                // 4. Scripts de Bloqueio visual
-                const antiCopyStyle = docClone.createElement('style');
-                antiCopyStyle.textContent = 'body { -webkit-user-select: none; user-select: none; }';
-                docClone.head.appendChild(antiCopyStyle);
-
-                // DEV DISRUPTIVO: Transforma o HTML limpo em um código Base64 Ilegível
-                const htmlContent = "<!DOCTYPE html>\n" + docClone.documentElement.outerHTML;
-                const encodedHtml = btoa(unescape(encodeURIComponent(htmlContent)));
-
-                // Cria um Lançador que fará a mágica na máquina do usuário final
-                const launcherHtml = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>LicitaHub - Sistema Protegido</title>
-</head>
-<body style="background:#0f172a; color:#fff; font-family:sans-serif; text-align:center; padding-top:20%; user-select: none;">
-    <h2>Inicializando Sistema Seguro...</h2>
-    <script>
-        document.addEventListener('contextmenu', e => e.preventDefault());
-        document.onkeydown = function(e) { if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || (e.ctrlKey && [85, 83].includes(e.keyCode))) return false; };
-        
-        setTimeout(() => {
-            const decoded = decodeURIComponent(escape(atob("${encodedHtml}")));
-            document.open();
-            document.write(decoded);
-            document.close();
-        }, 300);
-    </scr` + `ipt>
-</body>
-</html>`;
-
-                // Baixa o arquivo blindado
-                const blob = new Blob([launcherHtml], {type: 'text/html;charset=utf-8'});
+                const htmlContent = '<!DOCTYPE html>\n' + docClone.documentElement.outerHTML;
+                const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'LicitaHub_Protegido.html';
+                a.download = 'index.html';
                 a.click();
                 URL.revokeObjectURL(url);
-                toast({ title: 'Sucesso!', description: 'Arquivo blindado gerado e criptografado com sucesso.', variant: 'success' });
+                toast({ title: '✅ index.html salvo!', description: `${allUsers.length} usuário(s) embutido(s). Suba este arquivo no GitHub.`, variant: 'success' });
             };
+
+
          const [tabs, setTabs] = useState(() => {
                 try {
                     const saved = localStorage.getItem('licitahub-tabs');
@@ -1395,10 +1375,32 @@ const favoritesRef = useRef(favorites);
                                         </Button>
                                         
                                         {showUserAdmin && (
-                                            <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 z-50">
+                                            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 z-50 max-h-[80vh] overflow-y-auto">
                                                 <h3 className="font-bold text-sm mb-1 text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Icon name="shield" className="w-4 h-4"/> Área do Master</h3>
                                                 <p className="text-[10px] text-slate-500 mb-4">Crie contas limitadas para sua equipe.</p>
                                                 
+                                                {/* Lista de usuários existentes */}
+                                                {(() => {
+                                                    const listedUsers = (window.EMBEDDED_USERS || []).filter(u => u.role !== 'master');
+                                                    if (listedUsers.length === 0) return null;
+                                                    return (
+                                                        <div className="mb-4 space-y-1.5">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Usuários ativos ({listedUsers.length})</p>
+                                                            {listedUsers.map(u => (
+                                                                <div key={u.username} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2 text-xs">
+                                                                    <div>
+                                                                        <span className="font-bold text-slate-700 dark:text-slate-200">{u.username}</span>
+                                                                        <span className="ml-2 text-slate-400">até {u.expirationDate}</span>
+                                                                    </div>
+                                                                    <button onClick={() => handleDeleteUser(u.username)} className="text-red-400 hover:text-red-600 transition-colors ml-2 shrink-0" title="Remover usuário">
+                                                                        <Icon name="trash" className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
+
                                                 <form onSubmit={handleCreateUser} className="space-y-3">
                                                     <div>
                                                         <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Novo Usuário</label>
@@ -1415,9 +1417,10 @@ const favoritesRef = useRef(favorites);
                                                     <Button type="submit" className="w-full h-10 mt-2 text-xs">Criar Usuário</Button>
                                                     
                                                     <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800">
-                                                        <Button type="button" variant="outline" onClick={exportBlindedHTML} className="w-full h-10 text-[11px] bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900">
-                                                            <Icon name="shield" className="w-3.5 h-3.5 mr-1" /> Baixar Versão Cliente (Bloqueada)
+                                                        <Button type="button" variant="outline" onClick={saveUpdatedHTML} className="w-full h-10 text-[11px] bg-indigo-600 text-white hover:bg-indigo-700 border-transparent">
+                                                            <Icon name="save" className="w-3.5 h-3.5 mr-1" /> Salvar index.html atualizado
                                                         </Button>
+                                                        <p className="text-[10px] text-slate-400 mt-2 text-center">Faça upload deste arquivo no GitHub após salvar.</p>
                                                     </div>
                                                 </form>
                                             </div>
