@@ -1,0 +1,2206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LicitaHub - Central de Licitações (Com Radar)</title>
+    
+    <!-- BASE DE USUÁRIOS EMBUTIDA — Atualizada pelo botão "Salvar index.html" -->
+    <script>
+        window.EMBEDDED_USERS = [
+            { id: 'admin-master', username: 'andre.philipe', password: 'masterclass', role: 'master', expirationDate: '2099-12-31' }
+        ];
+    </script>
+
+    <!-- Google Fonts: Lora (Fonte estilo E-book) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'serif': ['Lora', 'ui-serif', 'Georgia', 'Cambria', '"Times New Roman"', 'Times', 'serif'],
+                    },
+                    colors: {
+                        background: 'hsl(var(--background))',
+                        foreground: 'hsl(var(--foreground))',
+                        primary: { DEFAULT: '#4f46e5', foreground: '#ffffff' },
+                        card: { DEFAULT: '#ffffff', dark: '#0f172a' },
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel para compilar JSX no navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        :root { --background: 210 40% 98%; --foreground: 222.2 84% 4.9%; }
+        .dark { --background: 222.2 84% 4.9%; --foreground: 210 40% 98%; }
+        body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); transition: background-color 0.3s ease; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #334155; }
+    </style>
+</head>
+<body class="font-sans antialiased min-h-screen flex flex-col">
+    <div id="root" class="flex-1 flex flex-col min-h-screen"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+        // ==========================================
+        // 1. SISTEMA DE ÍCONES
+        // ==========================================
+        const Icon = ({ name, className = "h-5 w-5" }) => {
+            const icons = {
+                zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
+                search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+                logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
+                alert: <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
+                check: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+                x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+                login: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2-2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></>,
+                eye: <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
+                eyeOff: <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>,
+                sun: <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
+                moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
+                save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
+                dashboard: <><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></>,
+                trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+                database: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>,
+                star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
+                starSolid: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor" />,
+                bell: <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>,
+                calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+                clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+                filter: <><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>,
+                refresh: <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></>,
+                mapPin: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
+                building: <><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></>,
+                slash: <><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></>,
+                shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></>,
+                target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+                trash: <><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></>,
+                archive: <><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></>,
+                settings: <><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name]}
+                </svg>
+            );
+        };
+
+        // ==========================================
+        // Utils: Formatação, Componentes Textuais e Regras
+        // ==========================================
+        
+        const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const removeAccents = (str) => {
+            if (!str) return '';
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        };
+
+        const formatDate = (isoString) => {
+            if (!isoString) return 'Não informada';
+            try {
+                const date = new Date(isoString);
+                if (isNaN(date.getTime())) return 'Inválida';
+                return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            } catch { return 'Inválida'; }
+        };
+
+        const formatDateTime = (isoString) => {
+            if (!isoString) return 'Não informada';
+            try {
+                const date = new Date(isoString);
+                if (isNaN(date.getTime())) return 'Inválida';
+                const formatted = date.toLocaleString('pt-BR', { 
+                    timeZone: 'America/Sao_Paulo', 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                return `${formatted}`;
+            } catch { return 'Inválida'; }
+        };
+
+        const getStatusColor = (status) => {
+            if (!status) return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+            const s = status.toLowerCase();
+            if (s.includes('recebendo') || s.includes('aberta') || s.includes('vigente')) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800';
+            if (s.includes('homologad') || s.includes('encerrad') || s.includes('concluíd')) return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+            if (s.includes('suspen') || s.includes('cancelad') || s.includes('revogad')) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800';
+            return 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-100 dark:border-blue-800';
+        };
+
+        // Highlight Inteligente
+        const HighlightedText = ({ text, highlight, matchType }) => {
+            if (!highlight || !text) return <span>{text}</span>;
+            try {
+                let regex;
+                if (matchType === 'exact') {
+                    regex = new RegExp(`(${escapeRegExp(highlight.trim())})`, 'gi');
+                } else {
+                    const words = highlight.trim().split(/\s+/).filter(Boolean);
+                    const accentMap = {
+                        'a': '[aáàãâäAÁÀÃÂÄ]', 'e': '[eéèêëEÉÈÊË]', 'i': '[iíìîïIÍÌÎÏ]',
+                        'o': '[oóòõôöOÓÒÕÔÖ]', 'u': '[uúùûüUÚÙÛÜ]', 'c': '[cçCÇ]'
+                    };
+                    const regexParts = words.map(w => {
+                        return w.split('').map(char => accentMap[char.toLowerCase()] || escapeRegExp(char)).join('');
+                    });
+                    regex = new RegExp(`(${regexParts.join('|')})`, 'gi');
+                }
+const parts = text.split(regex);
+                // Regex limpo apenas para testar cada parte isoladamente, sem alterar o lastIndex global
+                const testRegex = new RegExp(regex.source, 'i');
+                return (
+                    <span>
+                        {parts.map((part, i) => 
+                            testRegex.test(part) ? (
+                                <mark key={i} className="bg-yellow-300/90 text-yellow-900 font-bold rounded-sm px-1 shadow-sm">
+                                    {part}
+                                </mark>
+                            ) : (
+                                <span key={i}>{part}</span>
+                            )
+                        )}
+                    </span>
+                );
+            } catch (e) {
+                return <span>{text}</span>;
+            }
+        };
+
+        const ESTADOS_BR = [
+            'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 
+            'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+        ];
+        const ESFERAS = ['Municipal', 'Estadual', 'Federal'];
+
+        const getEsferaInfo = (nomeOrgao, esfera_nome) => {
+            if (esfera_nome) return esfera_nome;
+            const org = (nomeOrgao || '').toUpperCase();
+            if (org.includes('PREFEITURA') || org.includes('MUNICÍPIO') || org.includes('MUNICIPIO') || org.includes('CÂMARA MUNICIPAL')) return 'Municipal';
+            if (org.includes('ESTADO') || org.includes('TRIBUNAL DE JUSTIÇA') || org.includes('SECRETARIA DE ESTADO') || org.includes('POLÍCIA MILITAR')) return 'Estadual';
+            if (org.includes('FEDERAL') || org.includes('MINISTÉRIO') || org.includes('UNIÃO') || org.includes('INSTITUTO FEDERAL')) return 'Federal';
+            return 'Não informada';
+        };
+
+        const getCapagNote = (nomeOrgao) => {
+            if (!nomeOrgao) return null;
+            const upper = nomeOrgao.toUpperCase();
+            if (upper.includes('PREFEITURA') || upper.includes('MUNICÍPIO') || upper.includes('MUNICIPIO')) {
+                let hash = 0;
+                for (let i = 0; i < upper.length; i++) hash += upper.charCodeAt(i);
+                const scores = ['A', 'B', 'C', 'D'];
+                return scores[hash % 4]; 
+            }
+            return null;
+        };
+
+        const getCapagColor = (note) => {
+            switch(note) {
+                case 'A': return 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-400 dark:border-green-700';
+                case 'B': return 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700';
+                case 'C': return 'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-700';
+                case 'D': return 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-400 dark:border-red-700';
+                default: return 'bg-slate-100 text-slate-700 border-slate-300';
+            }
+        };
+
+        const extractPortalName = (item, defaultFallback = 'PNCP') => {
+            let sys = item.usuario_nome || item.usuarioNome || item.nome_sistema || item.nomeSistema || '';
+            const link = item.linkSistemaOrigem || item.item_url || '';
+            
+            if (!sys && link) {
+                if (link.includes('compras.gov.br') || link.includes('comprasnet')) sys = 'Compras.gov.br';
+                else if (link.includes('licitacoes-e')) sys = 'Licitações-e (BB)';
+                else if (link.includes('portaldecompraspublicas')) sys = 'Portal de Compras Públicas';
+                else if (link.includes('bec.sp.gov.br')) sys = 'BEC/SP';
+                else if (link.includes('bll.org.br') || link.includes('bllcompras')) sys = 'BLL Compras';
+                else if (link.includes('transparencia')) sys = 'Portal de Transparência';
+            }
+            
+            sys = sys || item.fonte || defaultFallback;
+            
+            if (sys.toUpperCase().includes('COMPRASNET') || sys.toUpperCase().includes('COMPRAS.GOV')) return 'Compras.gov.br';
+            if (sys.toUpperCase().includes('PORTAL DE COMPRAS PÚBLICAS')) return 'Portal de Compras Públicas';
+            
+            return sys;
+        };
+
+        // ==========================================
+        // 2. SISTEMA DE TOASTS
+        // ==========================================
+        let countId = 0;
+        const genId = () => (countId = (countId + 1) % Number.MAX_SAFE_INTEGER).toString();
+        const toastTimeouts = new Map();
+
+        const addToRemoveQueue = (toastId, dispatch) => {
+            if (toastTimeouts.has(toastId)) return;
+            const timeout = setTimeout(() => {
+                toastTimeouts.delete(toastId);
+                dispatch({ type: "REMOVE_TOAST", toastId });
+            }, 5000);
+            toastTimeouts.set(toastId, timeout);
+        };
+
+        const reducer = (state, action, dispatch) => {
+            switch (action.type) {
+                case "ADD_TOAST": return { ...state, toasts: [action.toast, ...state.toasts].slice(0, 5) };
+                case "DISMISS_TOAST":
+                    if (action.toastId) addToRemoveQueue(action.toastId, dispatch);
+                    else state.toasts.forEach((t) => addToRemoveQueue(t.id, dispatch));
+                    return { ...state, toasts: state.toasts.map((t) => t.id === action.toastId || !action.toastId ? { ...t, open: false } : t) };
+                case "REMOVE_TOAST": return { ...state, toasts: action.toastId ? state.toasts.filter((t) => t.id !== action.toastId) : [] };
+                default: return state;
+            }
+        };
+
+        let memoryState = { toasts: [] };
+        const listeners = [];
+        const dispatch = (action) => {
+            memoryState = reducer(memoryState, action, dispatch);
+            listeners.forEach((l) => l(memoryState));
+        };
+
+        const toast = (props) => {
+            const id = genId();
+            const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
+            dispatch({ type: "ADD_TOAST", toast: { ...props, id, open: true } });
+            return { id, dismiss };
+        };
+
+        const useToast = () => {
+            const [state, setState] = useState(memoryState);
+            useEffect(() => {
+                listeners.push(setState);
+                return () => { const i = listeners.indexOf(setState); if (i > -1) listeners.splice(i, 1); };
+            }, []);
+            return { ...state, toast, dismiss: (id) => dispatch({ type: "DISMISS_TOAST", toastId: id }) };
+        };
+
+        // ==========================================
+        // 3. MOTOR DE BUSCA API RESTAURADO E BLINDADO
+        // RESTAURADO COM BASE NA VERSÃO V3 QUE FUNCIONA 100%
+        // ==========================================
+        
+        const fetchApiSecure = async (url) => {
+            // Tenta comunicação direta primeiro
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' }});
+                if (res.ok) return res;
+            } catch(e) {}
+
+            // Usa o Proxy Original que sempre funcionou (AllOrigins GET method)
+            try {
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const res = await fetch(proxyUrl);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.contents) {
+                        return {
+                            ok: true,
+                            json: async () => JSON.parse(data.contents)
+                        };
+                    }
+                }
+            } catch(e) {}
+
+            throw new Error("Falha na rede ou bloqueio de CORS.");
+        };
+
+        async function searchPNCPFallback(keyword, pagina, vigentes) {
+            try {
+                const today = new Date();
+               const past = new Date(today); past.setMonth(past.getMonth() - 3);
+                const fmt = (d) => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+
+                // DEV: Array com TODAS as modalidades oficiais do PNCP (Concorrência, Pregão, Dispensa, Leilão, etc)
+                const modalidades = [1, 2, 3, 4, 5, 6, 7, 8]; 
+              const fetches = modalidades.map(async (mod) => {
+                    try {
+                        const url = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=${fmt(past)}&dataFinal=${fmt(today)}&codigoModalidadeContratacao=${mod}&pagina=${pagina}&tamanhoPagina=50`;
+                        const resp = await fetchApiSecure(url);
+                        if (!resp || !resp.ok) return [];
+                        const json = await resp.json();
+                        return (json.data || []);
+                    } catch (erro) {
+                        return []; // Se uma modalidade falhar, protege as outras!
+                    }
+                });
+
+                const results = await Promise.all(fetches);
+                const items = results.flat().map((item, i) => {
+                    const sys = extractPortalName(item);
+
+                    const num = item.numeroCompra || item.numeroControlePNCP?.split('-')[2]?.split('/')[0] || '';
+                    const ano = item.anoCompra || item.numeroControlePNCP?.split('/')[1] || '';
+                    const tituloBusca = num && ano ? `Edital nº ${String(num).padStart(3, '0')}/${ano}` : 'Edital / Contratação';
+                    const idContratacao = item.numero_controle_pncp || item.numeroControlePNCP || '';
+                    
+                    const fallbackId = item.orgaoEntidade?.cnpj ? `${item.orgaoEntidade.cnpj}-${ano}-${num}` : i;
+
+                    return {
+                        id: `pncp-${idContratacao || fallbackId}`,
+                        tituloBusca: tituloBusca,
+                        idContratacaoPncp: idContratacao,
+                        objetoCompra: item.objetoCompra || 'Sem título',
+                        orgaoEntidade: { razaoSocial: item.orgaoEntidade?.razaoSocial || '' },
+                        dataPublicacao: formatDate(item.dataPublicacaoPncp),
+                        dataIncioRecebimento: formatDateTime(item.dataAberturaProposta || item.dataInicioVigencia),
+                        dataFimRecebimento: formatDateTime(item.dataEncerramentoProposta || item.dataFimVigencia),
+                        rawDate: item.dataAberturaProposta || item.dataInicioVigencia || item.dataPublicacaoPncp || '1970-01-01',
+                        rawPublicacaoDate: item.dataPublicacaoPncp || '1970-01-01',
+                        modalidadeNome: item.modalidadeNome || 'Pregão',
+                        situacao: item.situacaoCompraNome || 'Publicado',
+                        valorTotalEstimado: item.valorTotalEstimado || 0,
+                        fonte: 'PNCP',
+                        sistema: sys,
+                        linkSistemaOrigem: item.linkSistemaOrigem || (item.orgaoEntidade?.cnpj && item.anoCompra && item.sequencialCompra
+                            ? `https://pncp.gov.br/app/editais/${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}` : ''),
+                        uf: item.unidadeOrgao?.ufSigla || item.uf || '',
+                        esfera: getEsferaInfo(item.orgaoEntidade?.razaoSocial, item.esferaNome)
+                    };
+                });
+                return { items, total: items.length };
+            } catch (e) { return { items: [], total: 0 }; }
+        }
+
+       async function searchPNCP(keyword, pagina, vigentes, searchType = 'edital') {
+            try {
+                const tipoDoc = searchType === 'ata' ? 'ata' : 'edital';
+                const params = new URLSearchParams({ q: keyword, tipos_documento: tipoDoc, pagina: String(pagina), tam_pagina: '50' });
+                // Atas não costumam ter status 'recebendo_proposta', então protegemos o filtro:
+                if (vigentes && searchType !== 'ata') params.set('status', 'recebendo_proposta');
+                const url = `https://pncp.gov.br/api/search/?${params}`;
+                
+                const resp = await fetchApiSecure(url);
+                if (!resp || !resp.ok) throw new Error('PNCP falhou');
+                
+                const json = await resp.json();
+                const items = (json.items || []).map(item => {
+                    const cnpj = item.orgao_cnpj || item.cnpj || '';
+                    const ano = item.ano || item.ano_compra || '';
+                    const seq = item.numero_sequencial || item.sequencial_compra || '';
+                    let link = (cnpj && ano && seq) ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}` : '';
+                    
+                    const sys = extractPortalName({ ...item, linkSistemaOrigem: link });
+
+                    const uf = item.unidade_orgao?.uf || item.unidade_orgao_uf || item.uf_sigla || item.uf || '';
+                    const esfera = getEsferaInfo(item.orgao_nome, item.esfera_nome);
+
+                    const numC = item.numero_compra || item.numero_sequencial || '';
+                   const anoC = item.ano_compra || item.ano || '';
+                    const tituloBusca = numC && anoC ? `${searchType === 'ata' ? 'Ata SRP' : 'Edital'} nº ${String(numC).padStart(3, '0')}/${anoC}` : `${searchType === 'ata' ? 'Ata de Registro de Preço' : 'Edital / Contratação'}`;
+                    const idContratacao = item.numero_controle_pncp || item.numeroControlePNCP || '';
+
+                    return {
+                        id: `pncp-${idContratacao || cnpj + '-' + ano + '-' + seq}`,
+                        tituloBusca: tituloBusca,
+                        idContratacaoPncp: idContratacao,
+                        objetoCompra: item.description || item.title || 'Sem título',
+                        orgaoEntidade: { razaoSocial: item.orgao_nome || '' },
+                        dataPublicacao: formatDate(item.data_publicacao_pncp),
+                        dataIncioRecebimento: formatDateTime(item.data_inicio_vigencia || item.data_abertura_proposta),
+                        dataFimRecebimento: formatDateTime(item.data_fim_vigencia || item.data_encerramento_proposta),
+                        rawDate: item.data_inicio_vigencia || item.data_publicacao_pncp || '1970-01-01',
+                        rawPublicacaoDate: item.data_publicacao_pncp || '1970-01-01',
+                        modalidadeNome: item.modalidade_licitacao_nome || 'Pregão',
+                        situacao: item.situacao_nome || (vigentes ? 'Recebendo Proposta' : 'Publicado'),
+                        valorTotalEstimado: item.valor_global || 0,
+                        linkSistemaOrigem: link,
+                        fonte: 'PNCP',
+                        sistema: sys,
+                        uf: uf,
+                        esfera: esfera
+                    };
+                });
+                return { items, total: json.count || items.length };
+            } catch (e) {
+                return await searchPNCPFallback(keyword, pagina, vigentes);
+            }
+        }
+
+        async function searchComprasGov(keyword, vigentes) {
+            try {
+                const url = `https://dadosabertos.compras.gov.br/modulo-legado/1_consultarLicitacao?pagina=1&tamanhoPagina=50&objetoLicitacao=${encodeURIComponent(keyword)}`;
+                const resp = await fetchApiSecure(url);
+                if (!resp || !resp.ok) throw new Error('Falha ComprasNet');
+                
+                const json = await resp.json();
+                
+                let records = json.resultado || [];
+                if (vigentes) {
+                    records = records.filter(i => {
+                        const sit = (i.situacaoLicitacao || '').toLowerCase();
+                        return sit.includes('aberta') || sit.includes('recebendo');
+                    });
+                }
+
+                return records.map(item => {
+                    let numStr = String(item.numero || '');
+                    if(numStr.length >= 5 && !numStr.includes('/')) {
+                        numStr = `${numStr.slice(0, -4)}/${numStr.slice(-4)}`;
+                    }
+                    const tituloBusca = numStr ? `Edital nº ${numStr}` : 'Edital / Contratação';
+
+                    return {
+                        id: `comprasgov-${item.codigoUASG}-${item.numero}-${item.codigoModalidade || '0'}`,
+                        tituloBusca: tituloBusca,
+                        idContratacaoPncp: '', 
+                        objetoCompra: item.objetoLicitacao || 'Sem título',
+                        orgaoEntidade: { razaoSocial: item.nomeOrgao || 'Compras.gov.br' },
+                        dataPublicacao: formatDate(item.dataPublicacao),
+                        dataIncioRecebimento: formatDateTime(item.dataAbertura),
+                        dataFimRecebimento: formatDateTime(item.dataEntregaProposta || item.dataEncerramento),
+                        rawDate: item.dataAbertura || item.dataPublicacao || '1970-01-01',
+                        rawPublicacaoDate: item.dataPublicacao || '1970-01-01',
+                        modalidadeNome: item.modalidadeLicitacao || 'ComprasNet',
+                        situacao: item.situacaoLicitacao || 'Publicado',
+                        valorTotalEstimado: item.valorEstimado || 0,
+                        linkSistemaOrigem: `https://www.gov.br/compras/pt-br`,
+                        fonte: 'COMPRASNET',
+                        sistema: 'Compras.gov.br',
+                        uf: item.uf || item.uf_sigla || '',
+                        esfera: 'Federal' 
+                    };
+                });
+            } catch (e) { return []; } 
+        }
+
+       const runFullSearchAndFilter = async (keyword, pagina, filters, archivedDict = {}) => {
+            let apiKeyword = keyword;
+            if (filters.matchType !== 'exact') {
+                apiKeyword = keyword.trim().split(/\s+/)[0];
+            }
+
+          const promises = [
+                searchPNCP(apiKeyword, pagina, filters.vigentes, filters.searchType)
+            ];
+            
+            // O ComprasGov Legado não possui API limpa para Atas, então só acionamos se for modo Edital
+            if (filters.searchType !== 'ata') {
+                promises.push(searchComprasGov(apiKeyword, filters.vigentes));
+            }
+            
+            const results = await Promise.allSettled(promises);
+            let allItems = [];
+            
+            // Abordagem original (segura): junta tudo o que der sucesso, ignora falhas parciais
+            results.forEach(res => {
+                if (res.status === 'fulfilled' && res.value) {
+                    if (Array.isArray(res.value)) allItems.push(...res.value);
+                    else if (res.value.items) allItems.push(...res.value.items);
+                }
+            });
+
+            // Se as duas falharem retornando array vazio, lançamos o erro para a UI
+            if (allItems.length === 0 && results.every(r => r.status === 'rejected')) {
+                throw new Error("Falha ao buscar dados oficiais. Todas as conexões falharam.");
+            }
+
+            const seenIds = new Set();
+
+            const searchKwNoAccents = removeAccents(keyword.toLowerCase()).split(/\s+/).filter(Boolean);
+            const regexExact = new RegExp('\\b' + escapeRegExp(keyword) + '\\b', 'i');
+
+            allItems = allItems.filter(item => {
+                // BLOQUEIO ABSOLUTO DO ARQUIVO
+                if (archivedDict[item.id]) return false;
+                
+                if (seenIds.has(item.id)) return false;
+                seenIds.add(item.id);
+
+                const text = `${item.objetoCompra} ${item.orgaoEntidade?.razaoSocial}`;
+                
+                if (filters.matchType === 'exact') {
+                    if (!regexExact.test(text)) return false;
+                } else {
+                    const textNormalized = removeAccents(text.toLowerCase());
+                    if (!searchKwNoAccents.every(w => textNormalized.includes(w))) return false;
+                }
+
+                if (filters.uf && filters.uf.length > 0) {
+                    if (!filters.uf.includes(item.uf)) return false;
+                }
+                
+                if (filters.esfera && Array.isArray(filters.esfera) && filters.esfera.length > 0) {
+                    if (!filters.esfera.includes(item.esfera)) return false;
+                }
+
+             if (filters.negative) {
+                    const negWords = removeAccents(filters.negative.toLowerCase()).split(',').map(w => w.trim()).filter(Boolean);
+                    const searchStr = removeAccents(text.toLowerCase());
+                    if (negWords.some(nw => searchStr.includes(nw))) return false;
+                }
+
+                if (filters.orgao) {
+                    const orgWord = removeAccents(filters.orgao.toLowerCase()).trim();
+                    const orgaoText = removeAccents((item.orgaoEntidade?.razaoSocial || '').toLowerCase());
+                    if (!orgaoText.includes(orgWord)) return false;
+                }
+                return true;
+            });
+
+            if (filters.dateStart || filters.dateEnd) {
+                const tsIni = filters.dateStart ? new Date(`${filters.dateStart}T00:00:00`).getTime() : 0;
+                const tsFim = filters.dateEnd ? new Date(`${filters.dateEnd}T23:59:59`).getTime() : Infinity;
+                
+                allItems = allItems.filter(item => {
+                    const itemTs = new Date(item.rawPublicacaoDate).getTime();
+                    if (isNaN(itemTs)) return true; 
+                    return itemTs >= tsIni && itemTs <= tsFim;
+                });
+            }
+
+            allItems.sort((a, b) => new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime());
+
+            return { items: allItems, total: allItems.length };
+        };
+        // ==========================================
+        // 4. COMPONENTES DE UI Genéricos
+        // ==========================================
+        const Button = ({ children, onClick, type, variant, disabled, className, title }) => {
+            const variants = {
+                primary: "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md border border-transparent",
+                ghost: "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-transparent",
+                outline: "border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-slate-900",
+                secondary: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent"
+            };
+            return (
+                <button type={type || "button"} onClick={onClick} disabled={disabled} title={title}
+                    className={`px-4 py-2 rounded-xl transition-all flex justify-center items-center gap-2 text-sm font-bold disabled:opacity-50 disabled:pointer-events-none ${variants[variant || 'primary']} ${className}`}>
+                    {children}
+                </button>
+            );
+        };
+
+        const Input = ({ className, ...props }) => (
+            <input className={`flex h-12 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all ${className}`} {...props} />
+        );
+
+        const Select = ({ className, children, ...props }) => (
+            <select className={`flex h-12 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all cursor-pointer ${className}`} {...props}>
+                {children}
+            </select>
+        );
+
+        const ThemeToggle = () => {
+            const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+            const toggle = () => {
+                const next = !isDark;
+                setIsDark(next);
+                if (next) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            };
+            return (
+                <Button variant="ghost" className="!p-2.5 rounded-full" onClick={toggle}>
+                    {isDark ? <Icon name="sun" /> : <Icon name="moon" />}
+                </Button>
+            );
+        };
+
+        // ==========================================
+        // 5. TELAS PRINCIPAIS
+        // ==========================================
+        const Login = ({ onLogin }) => {
+            const [user, setUser] = useState('');
+            const [pass, setPass] = useState('');
+            const [show, setShow] = useState(false);
+            const [err, setErr] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handle = async (e) => {
+                e.preventDefault();
+                setLoading(true); setErr('');
+                await new Promise(r => setTimeout(r, 600)); 
+                
+              // Fonte única de verdade: EMBEDDED_USERS (embutido no arquivo) + localStorage (sessão local) + GOOGLE SHEETS (Nuvem)
+                let users = window.EMBEDDED_USERS || [];
+               try {
+                    // Busca usuários fresquinhos da Planilha do Google (Nuvem)
+                    const urlPlanilha = 'https://script.google.com/macros/s/AKfycbx2APhZN--fCq8vuYrkQM-zbYERNJHN2ajLvyvNvo04-NbcwexQTD-PSglIbMQpe4FWLw/exec'; // COLOQUE SUA URL REAL AQUI!
+                    const resp = await fetch(urlPlanilha);
+                    const nuvemUsers = await resp.json();
+                    
+                    const localData = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                    
+                    // Une os embutidos, os locais e os da nuvem, priorizando os mais recentes!
+                    const combined = [...users, ...localData, ...nuvemUsers];
+                    users = Array.from(new Map(combined.map(u => [u.username, u])).values());
+                } catch(e) { 
+                    console.log("Nuvem inacessível no momento, usando cache local."); 
+                }
+
+          // Procura quem está tentando logar (ignorando espaços vazios e maiúsculas/minúsculas)
+                const foundUser = users.find(u => u.username.toLowerCase() === user.trim().toLowerCase() && u.password === pass.trim());
+
+                if (foundUser) {
+                   // Lógica Disruptiva: Verifica se a licença expirou (O Master nunca expira)
+                    if (foundUser.role !== 'master' && foundUser.expirationDate) {
+                        const today = new Date();
+                        const dataLimpa = foundUser.expirationDate.split('T')[0];
+                        const expDate = new Date(`${dataLimpa}T23:59:59`);
+                        
+                        if (today > expDate) {
+                            setErr('Sua licença de uso expirou. Contate o administrador.');
+                            setLoading(false);
+                            return;
+                        }
+                    }
+                    onLogin(foundUser); // Passa o usuário logado para o App
+                } else {
+                    setErr('Usuário ou senha incorretos.');
+                }
+                setLoading(false);
+            };
+
+            return (
+                <div className="flex-1 flex items-center justify-center p-4 relative overflow-hidden z-10">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/10 z-0 pointer-events-none"></div>
+                    <div className="absolute top-4 right-4 z-20"><ThemeToggle /></div>
+                    
+                    <div className="w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/20 dark:border-slate-800 p-10 z-10 relative">
+                        <div className="flex flex-col items-center gap-4 mb-10">
+                            <div className="h-16 w-16 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg">
+                                <Icon name="zap" className="h-8 w-8 text-white" />
+                            </div>
+                            <div className="text-center space-y-1">
+                                <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">LicitaHub</h1>
+                                <p className="text-sm font-medium text-slate-500">Central de Licitações</p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handle} className="space-y-6">
+                           <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">Usuário</label>
+                                <Input value={user} onChange={e => setUser(e.target.value)} placeholder="Digite seu usuário" autoFocus className="h-12 bg-white dark:bg-slate-950 shadow-sm" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">Senha</label>
+                                <div className="relative">
+                                    <Input type={show ? 'text' : 'password'} value={pass} onChange={e => setPass(e.target.value)} placeholder="Sua senha" className="h-12 pr-12 bg-white dark:bg-slate-950 shadow-sm" />
+                                    <button type="button" onClick={() => setShow(!show)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500 transition-colors">
+                                        <Icon name={show ? 'eyeOff' : 'eye'} />
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {err && (
+                                <div className="flex items-start gap-3 text-red-600 text-sm bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/50">
+                                    <Icon name="alert" className="h-5 w-5 shrink-0 mt-0.5" /> <span className="font-medium leading-tight">{err}</span>
+                                </div>
+                            )}
+
+                            <Button type="submit" className="w-full h-12 mt-4 text-base shadow-xl" disabled={loading}>
+                                {loading ? <span className="animate-spin h-5 w-5 border-2 border-white/30 border-t-white rounded-full"></span> : <><Icon name="login" className="h-5 w-5" /> Entrar no Sistema</>}
+                            </Button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+       const Dashboard = ({ onLogout, bgConfig, setBgConfig, currentUser }) => {
+       // Calcula os dias restantes da licença (Protegido contra formato do Google)
+            const diasRestantes = React.useMemo(() => {
+                if (!currentUser || currentUser.role === 'master' || !currentUser.expirationDate) return null;
+                
+                // A nossa "tesoura digital": pega apenas o YYYY-MM-DD e ignora as horas do Google
+                const dataLimpa = currentUser.expirationDate.split('T')[0];
+                
+                const diffTime = new Date(`${dataLimpa}T23:59:59`) - new Date();
+                const dias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                return isNaN(dias) ? 0 : dias; // Se por acaso der erro, mostra 0 em vez de NaN
+            }, [currentUser]);
+          // Estados para controle do Painel Master
+            const [showUserAdmin, setShowUserAdmin] = useState(false);
+            const [newUsername, setNewUsername] = useState('');
+            const [newPassword, setNewPassword] = useState('');
+            const [newExpiration, setNewExpiration] = useState('');
+            const [showGHConfig, setShowGHConfig] = useState(false);
+            const [saving, setSaving] = useState(false);
+            const [ghForm, setGhForm] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('licitahub-gh-config') || 'null') || { token: '', owner: '', repo: '', path: 'index.html', branch: 'main' }; }
+                catch { return { token: '', owner: '', repo: '', path: 'index.html', branch: 'main' }; }
+            });
+            const saveGHConfig = (e) => {
+                e.preventDefault();
+                localStorage.setItem('licitahub-gh-config', JSON.stringify(ghForm));
+                setShowGHConfig(false);
+                toast({ title: '⚙️ Configuração salva!', description: 'Repositório configurado com sucesso.', variant: 'success' });
+            };
+
+            const getAllUsers = () => {
+                const embedded = window.EMBEDDED_USERS || [];
+                const local = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                const combined = [...embedded, ...local];
+                return Array.from(new Map(combined.map(u => [u.username, u])).values());
+            };
+
+            // Credenciais embutidas do GitHub (Desativado - Usando Google Sheets)
+            const getGHConfig = () => {
+                const embedded = { token: '', owner: '', repo: '', path: '', branch: '' };
+                return embedded;
+            };
+
+            // Gera o HTML atualizado com os usuários embutidos
+            const buildUpdatedHTML = (allUsers) => {
+                const docClone = document.cloneNode(true);
+                const rootDiv = docClone.getElementById('root');
+                if (rootDiv) rootDiv.innerHTML = '';
+                const scripts = docClone.getElementsByTagName('script');
+                for (let i = 0; i < scripts.length; i++) {
+                    if (scripts[i].textContent.includes('window.EMBEDDED_USERS')) {
+                        scripts[i].textContent = `\n        window.EMBEDDED_USERS = ${JSON.stringify(allUsers, null, 8)};\n    `;
+                        break;
+                    }
+                }
+                return '<!DOCTYPE html>\n' + docClone.documentElement.outerHTML;
+            };
+// 🚀 NOVA CONEXÃO DISRUPTIVA: Salva no Google Sheets
+            const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbx2APhZN--fCq8vuYrkQM-zbYERNJHN2ajLvyvNvo04-NbcwexQTD-PSglIbMQpe4FWLw/exec';
+
+            const saveToGoogleSheets = async (novoUser) => {
+                setSaving(true);
+                try {
+                    await fetch(GOOGLE_SHEETS_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(novoUser)
+                    });
+                    toast({ title: '✅ Salvo na Nuvem!', description: `Usuário sincronizado na planilha.`, variant: 'success' });
+                } catch (e) {
+                    toast({ title: 'Erro na Nuvem', description: 'Usuário salvo localmente, mas falhou ao enviar para o Google.', variant: 'destructive' });
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            const handleCreateUser = async (e) => {
+                e.preventDefault();
+                if (!newUsername || !newPassword || !newExpiration) return;
+
+                const allUsers = getAllUsers();
+                if (allUsers.some(u => u.username === newUsername.trim())) {
+                    toast({ title: 'Usuário já existe!', description: 'Escolha outro nome de usuário.', variant: 'destructive' });
+                    return;
+                }
+
+                const novoUser = { id: Date.now(), username: newUsername.trim(), password: newPassword.trim(), role: 'common', expirationDate: newExpiration };
+                window.EMBEDDED_USERS = [...(window.EMBEDDED_USERS || []), novoUser];
+                const localUsers = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                localStorage.setItem('licitahub-users', JSON.stringify([...localUsers, novoUser]));
+                setNewUsername(''); setNewPassword(''); setNewExpiration('');
+                
+                // Dispara os dados para a planilha na nuvem!
+                await saveToGoogleSheets(novoUser);
+            };
+const handleDeleteUser = async (username) => {
+                if (!window.confirm(`Remover o usuário "${username}"?`)) return;
+                window.EMBEDDED_USERS = (window.EMBEDDED_USERS || []).filter(u => u.username !== username);
+                const local = JSON.parse(localStorage.getItem('licitahub-users') || '[]');
+                localStorage.setItem('licitahub-users', JSON.stringify(local.filter(u => u.username !== username)));
+                toast({ title: 'Usuário removido', description: 'Removido localmente. (Para remover da nuvem, apague a linha no Google Sheets)', variant: 'info' });
+            };
+
+         const [tabs, setTabs] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('licitahub-tabs');
+                    if (!saved) return [];
+                    const parsed = JSON.parse(saved);
+                    return parsed || []; // Protege contra o valor "null" em texto
+                } catch (erro) { return []; }
+            });
+            
+          const [activeTab, setActiveTab] = useState(null); 
+            const [keywordInput, setKeywordInput] = useState('');
+            const [searchType, setSearchType] = useState('edital'); // NOVO: Controle de Edital ou Ata
+            const [showFilters, setShowFilters] = useState(false);
+           
+            
+            const [filterMatchType, setFilterMatchType] = useState('approximate');
+            const [filterVigentes, setFilterVigentes] = useState(false);
+          const [filterUf, setFilterUf] = useState([]); 
+            const [filterEsfera, setFilterEsfera] = useState([]); // Múltipla escolha
+            const [filterNegative, setFilterNegative] = useState('');            const [filterOrgao, setFilterOrgao] = useState(''); // NOVO: Filtro de Órgão
+            const [localSearch, setLocalSearch] = useState(''); // NOVO: Pesquisa interna dos Arquivados
+            const [filterDateStart, setFilterDateStart] = useState('');
+            const [filterDateEnd, setFilterDateEnd] = useState('');
+
+            const [modalityFilter, setModalityFilter] = useState('Todas');
+            const [statusFilter, setStatusFilter] = useState('Todas');
+
+            const [favorites, setFavorites] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('licitahub-favorites');
+                    if (!saved) return {};
+                    const parsed = JSON.parse(saved);
+                    return parsed || {};
+                } catch (erro) { return {}; }
+            });
+
+           const [archived, setArchived] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('licitahub-archived');
+                    if (!saved) return {};
+                    const parsed = JSON.parse(saved);
+                    
+                    // DEV DISRUPTIVO: Limpeza automática dos fantasmas velhos
+                    const dadosReais = {};
+                    if (parsed) {
+                        for (let key in parsed) {
+                            // Só guarda no baú se for um card completo (objeto)
+                            if (typeof parsed[key] === 'object' && parsed[key] !== null) {
+                                dadosReais[key] = parsed[key];
+                            }
+                        }
+                    }
+                    return dadosReais;
+                } catch (erro) { return {}; }
+            });
+
+            const [showSettings, setShowSettings] = useState(false);
+            const [selectedItems, setSelectedItems] = useState(new Set());
+
+         const [notifications, setNotifications] = useState([]);
+            const [showNotifications, setShowNotifications] = useState(false);
+            const [showIrpModal, setShowIrpModal] = useState(false);
+            
+            // NOVOS CONTROLES DO SMART HUB IRP
+            const [isIrpFullscreen, setIsIrpFullscreen] = useState(false);
+            const [irpUrl, setIrpUrl] = useState('https://www2.comprasnet.gov.br/siasgnet-atasrp/public/pesquisarFornecimento.do?method=iniciar');
+            const [irpNotes, setIrpNotes] = useState(() => localStorage.getItem('licitahub-irp-notes') || '');
+            
+            useEffect(() => {
+                localStorage.setItem('licitahub-irp-notes', irpNotes);
+            }, [irpNotes]);
+            // FIM DOS NOVOS CONTROLES
+
+            const { toast } = useToast();
+
+            const [isRadarActive, setIsRadarActive] = useState(false);
+            const [radarIntervalMin, setRadarIntervalMin] = useState(5); 
+            const tabsRef = useRef(tabs);
+const archivedRef = useRef(archived);
+const favoritesRef = useRef(favorites);
+
+            useEffect(() => { setSelectedItems(new Set()); }, [activeTab]);
+
+            useEffect(() => {
+                localStorage.setItem('licitahub-tabs', JSON.stringify(tabs));
+                tabsRef.current = tabs; 
+            }, [tabs]);
+
+            useEffect(() => { 
+    localStorage.setItem('licitahub-favorites', JSON.stringify(favorites)); 
+    favoritesRef.current = favorites;
+}, [favorites]);
+
+            useEffect(() => {
+                localStorage.setItem('licitahub-archived', JSON.stringify(archived));
+                archivedRef.current = archived; 
+            }, [archived]);
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1920; 
+                        const MAX_HEIGHT = 1080;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else {
+                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                        
+                        try {
+                            localStorage.setItem('licitahub-bg', JSON.stringify({...bgConfig, url: dataUrl}));
+                            setBgConfig({...bgConfig, url: dataUrl});
+                            toast({ title: 'Imagem Salva', description: 'O plano de fundo foi atualizado com sucesso.', variant: 'success' });
+                        } catch (err) {
+                            toast({ title: 'Erro', description: 'A imagem continua a ser muito pesada para o navegador.', variant: 'destructive' });
+                        }
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+
+        // DEV: Motor global criado fora da função para o navegador não bloquear!
+          window.globalAudioCtx = window.globalAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+
+          const playAlertSound = () => {
+                try {
+                    if (window.globalAudioCtx.state === 'suspended') window.globalAudioCtx.resume();
+                    
+                    const osc = window.globalAudioCtx.createOscillator();
+                    const gainNode = window.globalAudioCtx.createGain();
+                    
+                    osc.connect(gainNode);
+                    gainNode.connect(window.globalAudioCtx.destination);
+                    
+                    osc.type = 'sine'; 
+                    osc.frequency.setValueAtTime(880, window.globalAudioCtx.currentTime); 
+                    
+                    gainNode.gain.setValueAtTime(0, window.globalAudioCtx.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(0.5, window.globalAudioCtx.currentTime + 0.1);
+                    gainNode.gain.linearRampToValueAtTime(0, window.globalAudioCtx.currentTime + 0.5);
+                    
+                    osc.start(window.globalAudioCtx.currentTime);
+                    osc.stop(window.globalAudioCtx.currentTime + 0.5);
+                } catch (e) { console.warn("Erro no áudio sintético:", e); }
+            };
+            const checkForUpdates = async (isManual = false) => {
+                const currentTabs = tabsRef.current;
+                if (currentTabs.length === 0) {
+                    if (isManual) toast({ title: 'Aviso', description: 'Não há pesquisas ativas para atualizar.', variant: 'info' });
+                    return;
+                }
+
+                if (isManual) toast({ title: 'Buscando atualizações...', description: 'Verificando todas as pesquisas abertas...', variant: 'info' });
+
+                let totalNovos = 0;
+
+                for (let tab of currentTabs) {
+                    try {
+                        const data = await runFullSearchAndFilter(tab.keyword, 1, tab.filters, archivedRef.current);
+                        
+                        setTabs(prevTabs => {
+                            const targetTab = prevTabs.find(t => t.keyword === tab.keyword);
+                            if (!targetTab) return prevTabs;
+
+                            const existingIds = new Set(targetTab.items.map(i => i.id));
+                            const newItems = data.items.filter(i => !existingIds.has(i.id) && !archivedRef.current[i.id] && !favoritesRef.current[i.id]);
+
+                            if (newItems.length > 0) {
+                                totalNovos += newItems.length;
+                                
+                                // O Toque Mágico: Dispara o alerta sonoro!
+                                if (!isManual) playAlertSound();
+
+                                setNotifications(prev => [
+                                    {
+                                        id: Date.now().toString() + Math.random(),
+                                        message: `${isManual ? 'Manual' : 'Radar'}: ${newItems.length} nova(s) licitação(ões) detectada(s) para "${tab.keyword}".`,
+                                        unread: true,
+                                        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                    },
+                                    ...prev
+                                ]);
+
+                                if (!isManual) {
+                                    toast({ 
+                                        title: '🎯 Radar: Nova Licitação!', 
+                                        description: `Encontramos ${newItems.length} edital(is) novo(s) para "${tab.keyword}".`, 
+                                        variant: 'success' 
+                                    });
+                                }
+
+                                const taggedNewItems = newItems.map(i => ({...i, isNewFromRadar: true}));
+                                const existingItemsCleared = targetTab.items.map(i => ({...i, isNewFromRadar: false}));
+
+                                return prevTabs.map(t => t.keyword === tab.keyword ? { 
+                                    ...t, 
+                                    items: [...taggedNewItems, ...existingItemsCleared], 
+                                    total: t.total + newItems.length 
+                                } : t);
+                            }
+                            return prevTabs;
+                        });
+                    } catch (err) {
+                        console.error(`Falha na atualização da aba ${tab.keyword}`);
+                    }
+                }
+
+                if (isManual) {
+                    if (totalNovos > 0) {
+                        toast({ title: 'Atualização Concluída', description: `Encontramos ${totalNovos} novos editais!`, variant: 'success' });
+                    } else {
+                        toast({ title: 'Tudo Atualizado', description: 'Nenhuma licitação nova encontrada nos portais.', variant: 'info' });
+                    }
+                }
+            };
+
+            useEffect(() => {
+                if (!isRadarActive) return;
+                const intervalMs = radarIntervalMin * 60000;
+                const intervalId = setInterval(() => checkForUpdates(false), intervalMs);
+                return () => clearInterval(intervalId);
+            }, [isRadarActive, radarIntervalMin]);
+
+            const isFavoritesView = activeTab === 'FAVORITOS';
+            const isArchivedView = activeTab === 'ARQUIVADOS';
+            const currentTabObj = tabs.find(t => t.keyword === activeTab);
+            
+            // Tratamento disruptivo para evitar quebrar com arquivados velhos (que eram só 'true')
+            const baseItems = isFavoritesView ? Object.values(favorites) : 
+                              isArchivedView ? Object.values(archived).filter(item => typeof item === 'object') : 
+                              (currentTabObj?.items || []);
+            
+            const displayedItems = useMemo(() => {
+                let items = baseItems;
+                
+                // Se NÃO for a visão de arquivados, esconde o que estiver no baú
+                if (!isArchivedView) {
+                    items = items.filter(item => !archived[item.id]);
+                }
+                
+                // Se NÃO for aba de favoritos e nem de arquivados, esconde os favoritos
+                if (!isFavoritesView && !isArchivedView) {
+                    items = items.filter(item => !favorites[item.id]);
+                }
+
+                if (modalityFilter !== 'Todas') items = items.filter(i => i.modalidadeNome === modalityFilter);
+                if (statusFilter !== 'Todas') items = items.filter(i => i.situacao === statusFilter);
+                
+                // Filtro Dinâmico de Órgão para Abas Locais
+                if (filterOrgao) {
+                    const orgWord = removeAccents(filterOrgao.toLowerCase()).trim();
+                    items = items.filter(i => removeAccents((i.orgaoEntidade?.razaoSocial || '').toLowerCase()).includes(orgWord));
+                }
+
+               // Busca local exclusiva dentro da aba de Arquivados
+                if (isArchivedView && localSearch) {
+                    const searchWord = removeAccents(localSearch.toLowerCase()).trim();
+                    items = items.filter(i => 
+                        removeAccents((i.objetoCompra || '').toLowerCase()).includes(searchWord) ||
+                        removeAccents((i.orgaoEntidade?.razaoSocial || '').toLowerCase()).includes(searchWord) ||
+                        removeAccents((i.tituloBusca || '').toLowerCase()).includes(searchWord)
+                    );
+                }
+                
+                return items;
+            }, [baseItems, modalityFilter, statusFilter, archived, favorites, isFavoritesView, isArchivedView, filterOrgao, localSearch]);
+
+            const uniqueModalities = useMemo(() => ['Todas', ...new Set(displayedItems.map(i => i.modalidadeNome).filter(Boolean))].sort(), [displayedItems]);
+            const uniqueStatuses = useMemo(() => ['Todas', ...new Set(displayedItems.map(i => i.situacao).filter(Boolean))].sort(), [displayedItems]);
+            
+          const doSearch = async () => {
+                const currentFilters = { 
+                    matchType: filterMatchType, vigentes: filterVigentes, uf: filterUf,
+                    esfera: filterEsfera, negative: filterNegative, orgao: filterOrgao, dateStart: filterDateStart, dateEnd: filterDateEnd,
+                    searchType: searchType 
+                };
+                let kw = keywordInput.trim();
+                
+                // Proteção para não re-pesquisar abas internas de sistema
+                if (!kw && activeTab && activeTab !== 'FAVORITOS' && activeTab !== 'ARQUIVADOS') kw = activeTab;
+
+                // NOVA REGRA: Exige Palavra-chave OU Órgão
+                if (!kw && !filterOrgao) {
+                    toast({ title: 'Aviso', description: 'Insira uma palavra-chave ou o nome do Órgão nos filtros.', variant: 'info' });
+                    return;
+                }
+
+                // TRUQUE DISRUPTIVO: Se não tem palavra-chave, usamos o nome do órgão para enganar a API e puxar os dados!
+                const tabKey = kw ? kw.toLowerCase() : `Órgão: ${filterOrgao}`;
+                const apiSearchTerm = kw ? kw.toLowerCase() : filterOrgao;
+
+                setKeywordInput('');
+                setActiveTab(tabKey);
+                setModalityFilter('Todas');
+                setStatusFilter('Todas');
+
+                setTabs(prev => {
+                    const exists = prev.find(t => t.keyword === tabKey);
+                    if (exists) return prev.map(t => t.keyword === tabKey ? { ...t, loading: true, filters: currentFilters } : t);
+                    return [...prev, { keyword: tabKey, filters: currentFilters, items: [], total: 0, loading: true }];
+                });
+
+                try {
+                    // Aqui a mágica acontece: mandamos 'apiSearchTerm' para o Governo
+                    const data = await runFullSearchAndFilter(apiSearchTerm, 1, currentFilters, archivedRef.current);
+                    const validItems = data.items;
+
+                    setTabs(prev => prev.map(t => t.keyword === tabKey ? { ...t, items: validItems, total: validItems.length, loading: false } : t));
+                    
+                  if (validItems.length === 0) {
+                        toast({ title: 'Aviso', description: 'Nenhum resultado encontrado para os filtros selecionados.', variant: 'info' });
+                    } else {
+                        playAlertSound();
+                        toast({ title: 'Pesquisa Concluída', description: `Encontrados ${validItems.length} resultados.`, variant: 'success' });
+                    }
+                } catch (err) {
+                    toast({ title: 'Falha de Conexão', description: 'Não foi possível conectar aos portais do Governo.', variant: 'destructive' });
+                    setTabs(prev => prev.map(t => t.keyword === tabKey ? { ...t, loading: false } : t));
+                }
+            };
+
+          const closeTab = (kw, e) => {
+                e.stopPropagation();
+                
+                // 1. Descobre como a lista vai ficar
+                const newTabs = tabs.filter(t => t.keyword !== kw);
+                
+                // 2. Muda a aba ativa PRIMEIRO (de forma segura)
+                if (activeTab === kw) {
+                    if (Object.keys(favorites).length > 0) {
+                        setActiveTab('FAVORITOS');
+                    } else {
+                        setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1].keyword : null);
+                    }
+                }
+                
+                // 3. Atualiza a lista de abas
+                setTabs(newTabs);
+            };
+
+            const toggleSelect = (id) => {
+                setSelectedItems(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                });
+            };
+
+            const allDisplayedSelected = displayedItems.length > 0 && displayedItems.every(i => selectedItems.has(i.id));
+
+            const toggleSelectAll = () => {
+                if (allDisplayedSelected) {
+                    setSelectedItems(prev => {
+                        const next = new Set(prev);
+                        displayedItems.forEach(i => next.delete(i.id));
+                        return next;
+                    });
+                } else {
+                    setSelectedItems(prev => {
+                        const next = new Set(prev);
+                        displayedItems.forEach(i => next.add(i.id));
+                        return next;
+                    });
+                }
+            };
+
+            const handleArchiveItem = (item) => {
+                if (window.confirm("Deseja mesmo arquivar este edital? Ele não voltará a aparecer nas suas pesquisas.")) {
+                    setArchived(prev => ({ ...prev, [item.id]: item }));
+                    
+                    setFavorites(prev => {
+                        const newFavs = { ...prev };
+                        delete newFavs[item.id];
+                        return newFavs;
+                    });
+
+                    setTabs(prev => prev.map(t => ({
+                        ...t,
+                        items: t.items.filter(i => i.id !== item.id),
+                        total: t.items.filter(i => i.id !== item.id).length
+                    })));
+
+                    toast({ title: 'Edital Arquivado', description: 'Edital removido e oculto com sucesso.', variant: 'success' });
+                }
+            };
+
+            const handleArchiveSelected = () => {
+                if (selectedItems.size === 0) return;
+                
+               if (window.confirm(`Tem a certeza que deseja arquivar definitivamente os ${selectedItems.size} editais selecionados?`)) {
+                    const newArchived = { ...archived };
+                    selectedItems.forEach(id => {
+                        const targetItem = displayedItems.find(i => i.id === id);
+                        if (targetItem) newArchived[id] = targetItem;
+                    });
+                    setArchived(newArchived);
+                    setFavorites(prev => {
+                        const newFavs = { ...prev };
+                        selectedItems.forEach(id => delete newFavs[id]);
+                        return newFavs;
+                    });
+
+                    setTabs(prev => prev.map(t => ({
+                        ...t,
+                        items: t.items.filter(i => !selectedItems.has(i.id)),
+                        total: t.items.filter(i => !selectedItems.has(i.id)).length
+                    })));
+
+                    toast({ title: 'Limpeza Concluída', description: `${selectedItems.size} resultados foram arquivados definitivamente.`, variant: 'success' });
+                    setSelectedItems(new Set());
+                }
+            };
+
+            const handleFavorite = (item) => {
+                const isFav = !!favorites[item.id];
+                if (!isFav) {
+                    setFavorites(prev => ({...prev, [item.id]: { ...item, keywordOrigin: activeTab === 'FAVORITOS' ? item.keywordOrigin : activeTab }}));
+                    toast({ title: 'Adicionado aos Favoritos!', description: 'Você receberá alertas deste edital.', variant: 'success' });
+                } else {
+                    const newFavs = {...favorites};
+                    delete newFavs[item.id];
+                    setFavorites(newFavs);
+                    toast({ title: 'Removido', description: 'Edital removido dos favoritos.' });
+                    if (Object.keys(newFavs).length === 0 && activeTab === 'FAVORITOS') {
+                        setActiveTab(tabs.length > 0 ? tabs[tabs.length - 1].keyword : null);
+                    }
+                }
+            };
+
+            // DEV DISRUPTIVO: Motor de Exportação para Excel (CSV) via Blob Seguro
+            const exportToExcel = () => {
+                if (displayedItems.length === 0) {
+                    toast({ title: 'Aviso', description: 'Não há dados para exportar.', variant: 'info' });
+                    return;
+                }
+
+                let csvRows = [];
+                // Cabeçalho
+                csvRows.push("Fonte;Modalidade;Situacao;Orgao;UF;Esfera;Data Publicacao;Data Recebimento;Objeto;Valor Estimado;Link");
+
+                displayedItems.forEach(item => {
+                    const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+                    const row = [
+                        escapeCsv(item.sistema), escapeCsv(item.modalidadeNome), escapeCsv(item.situacao),
+                        escapeCsv(item.orgaoEntidade?.razaoSocial), escapeCsv(item.uf), escapeCsv(item.esfera),
+                        escapeCsv(item.dataPublicacao), escapeCsv(item.dataIncioRecebimento), escapeCsv(item.objetoCompra),
+                        escapeCsv(item.valorTotalEstimado), escapeCsv(item.linkSistemaOrigem)
+                    ].join(";");
+                    csvRows.push(row);
+                });
+
+                // Junta tudo com quebra de linha e insere o BOM (\uFEFF) para forçar o Excel a ler os acentos (UTF-8)
+                const csvString = "\uFEFF" + csvRows.join("\n");
+                
+                // Cria um arquivo binário na memória (Blob), resolvendo o limite de caracteres e de tamanho!
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `Licitacoes_${(activeTab || 'Export').replace(/[^a-z0-9]/gi, '_')}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url); // Limpa a memória do navegador
+                
+                toast({ title: 'Excel Gerado', description: 'Sua planilha foi baixada com sucesso.', variant: 'success' });
+            };
+            return (
+                <div className="flex-1 flex flex-col z-10">
+                    <header className="border-b border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
+                        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg"><Icon name="zap" className="h-5 w-5 text-white" /></div>
+                               <div>
+                                    <h1 className="text-xl font-bold leading-none tracking-tight">LicitaHub</h1>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                                        Central de Licitações <span className="text-slate-300 dark:text-slate-600">|</span> 
+                                        <span className="text-indigo-600 dark:text-indigo-400">
+                                            Usuário: {currentUser?.username}
+                                        </span>
+                                        <span className="text-slate-300 dark:text-slate-600">|</span>
+                                        {currentUser?.role === 'master' ? (
+                                            <span className="text-emerald-600 dark:text-emerald-400 font-black">Acesso Master</span>
+                                        ) : (
+                                            <span className={`${diasRestantes <= 3 ? 'text-red-600 animate-pulse' : 'text-blue-600 dark:text-blue-400'} font-black`}>
+                                                {diasRestantes !== null ? `Validade: ${diasRestantes} dia(s)` : 'Sem licença'}
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <div className="relative">
+                                    <Button variant="ghost" className="!p-2.5 rounded-full relative bg-white/50 dark:bg-slate-800/50" onClick={() => setShowNotifications(!showNotifications)}>
+                                        <Icon name="bell" className="h-5 w-5" />
+                                        {notifications.some(n => n.unread) && <span className="absolute top-1 right-1.5 h-2.5 w-2.5 bg-red-500 border-2 border-white dark:border-slate-900 rounded-full animate-pulse"></span>}
+                                    </Button>
+                                    
+                                    {showNotifications && (
+                                        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 z-50">
+                                            <h3 className="font-bold mb-3 text-sm flex justify-between items-center">Avisos {notifications.some(n => n.unread) && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Novos</span>}</h3>
+                                            {notifications.length === 0 ? <p className="text-sm text-slate-500 text-center py-4">Nenhum aviso no momento.</p> : (
+                                                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                                    {notifications.map(n => (
+                                                        <div key={n.id} className={`p-3 rounded-xl text-sm cursor-pointer transition-colors ${n.unread ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50' : 'bg-slate-50 dark:bg-slate-800/50 border border-transparent'}`} 
+                                                        onClick={() => { setNotifications(prev => prev.map(x => x.id === n.id ? {...x, unread: false} : x)); if (n.itemLink) window.open(n.itemLink, '_blank'); }}>
+                                                            <div className="flex justify-between items-start mb-1"><span className="font-bold text-[11px] text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Aviso de Retificação</span><span className="text-[10px] text-slate-400">{n.time}</span></div>
+                                                            <p className="text-xs text-slate-600 dark:text-slate-300">{n.message}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="relative">
+                                    <Button variant="ghost" className="!p-2.5 rounded-full bg-white/50 dark:bg-slate-800/50" onClick={() => setShowSettings(!showSettings)} title="Personalizar Visual">
+                                        <Icon name="settings" className="h-5 w-5" />
+                                    </Button>
+                                    {showSettings && (
+                                        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 z-50">
+                                            <h3 className="font-bold text-sm mb-4">Personalização do Painel</h3>
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Imagem de Fundo (JPG ou PNG)</label>
+                                                    <input 
+                                                        type="file" 
+                                                        accept="image/jpeg, image/png" 
+                                                        onChange={handleImageUpload} 
+                                                        className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/30 dark:file:text-indigo-400 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50 cursor-pointer" 
+                                                    />
+                                                    {bgConfig.url && (
+                                                        <button 
+                                                            onClick={() => setBgConfig({...bgConfig, url: ''})} 
+                                                            className="mt-3 text-[10px] bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors w-full text-center"
+                                                        >
+                                                            Remover Imagem Atual
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Opacidade do Fundo</label>
+                                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{Math.round(bgConfig.opacity * 100)}%</span>
+                                                    </div>
+                                                    <input type="range" min="0.05" max="1" step="0.05" value={bgConfig.opacity} onChange={e => setBgConfig({...bgConfig, opacity: parseFloat(e.target.value)})} className="w-full accent-indigo-600 cursor-pointer" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+{currentUser?.role === 'master' && (
+                                    <div className="relative">
+                                        <Button variant="ghost" className="!p-2.5 rounded-full bg-white/50 dark:bg-slate-800/50 text-indigo-600 dark:text-indigo-400" onClick={() => setShowUserAdmin(!showUserAdmin)} title="Painel Master: Criar Usuários">
+                                            <Icon name="shield" className="h-5 w-5" />
+                                        </Button>
+                                        
+                                        {showUserAdmin && (
+                                            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 z-50 max-h-[80vh] overflow-y-auto">
+                                                <h3 className="font-bold text-sm mb-1 text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Icon name="shield" className="w-4 h-4"/> Área do Master</h3>
+                                                <p className="text-[10px] text-slate-500 mb-4">Crie contas limitadas para sua equipe.</p>
+                                                
+                                                {/* Lista de usuários existentes */}
+                                                {(() => {
+                                                    const listedUsers = (window.EMBEDDED_USERS || []).filter(u => u.role !== 'master');
+                                                    if (listedUsers.length === 0) return null;
+                                                    return (
+                                                        <div className="mb-4 space-y-1.5">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Usuários ativos ({listedUsers.length})</p>
+                                                            {listedUsers.map(u => (
+                                                                <div key={u.username} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2 text-xs">
+                                                                    <div>
+                                                                        <span className="font-bold text-slate-700 dark:text-slate-200">{u.username}</span>
+                                                                        <span className="ml-2 text-slate-400">até {u.expirationDate}</span>
+                                                                    </div>
+                                                                    <button onClick={() => handleDeleteUser(u.username)} className="text-red-400 hover:text-red-600 transition-colors ml-2 shrink-0" title="Remover usuário">
+                                                                        <Icon name="trash" className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                <form onSubmit={handleCreateUser} className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Novo Usuário</label>
+                                                        <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm" placeholder="ex: joao.silva" required />
+                                                    </div>
+                                                   <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Senha Padrão</label>
+                                                        <input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm" placeholder="Senha" required />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Válido até</label>
+                                                        <input type="date" value={newExpiration} onChange={e => setNewExpiration(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm" required />
+                                                    </div>
+                                                    <Button type="submit" disabled={saving} className="w-full h-10 mt-2 text-xs">
+                                                        {saving ? <><span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full mr-2"></span>Publicando...</> : 'Criar Usuário'}
+                                                    </Button>
+                                                </form>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <ThemeToggle />
+                                <Button variant="ghost" className="!p-2.5 rounded-full bg-white/50 dark:bg-slate-800/50" onClick={onLogout}><Icon name="logout" className="h-5 w-5" /></Button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-[98%] mx-auto px-4 py-6 w-full flex-1 flex flex-col gap-6 relative z-10">
+                        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-4 sm:p-6 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-800/50 space-y-4">
+                            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                                <div className="relative flex-1 min-w-[200px]">
+                                    <Icon name="search" className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    <Input placeholder="Termo exato de pesquisa (Ex: tecnologia, asfalto, limpeza)..." className="pl-12 font-medium" value={keywordInput} onChange={e => setKeywordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} />
+                                </div>
+                               <Button variant="secondary" className="h-12 px-4" onClick={() => setShowFilters(!showFilters)} title="Filtros de Pesquisa">
+                                    <Icon name="filter" className="h-5 w-5" /> Filtros
+                                </Button>
+                                
+                                {/* NOVO BOTÃO IRP */}
+                                <Button variant="outline" className="h-12 px-4 border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/30 shadow-sm" onClick={() => setShowIrpModal(true)} title="Buscar IRPs e Atas (Sistema SIASG)">
+                                    <Icon name="database" className="h-5 w-5" /> Portal IRP / Atas
+                                </Button>
+
+                                <div className={`flex items-center gap-1 p-1 rounded-xl transition-colors ${isRadarActive ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : ''}`}>
+                                    <Button 
+                                        variant={isRadarActive ? "primary" : "outline"} 
+                                        className={`h-10 px-4 relative transition-all ${isRadarActive ? 'bg-green-600 hover:bg-green-700 shadow-md text-white border-transparent' : 'h-12 border-slate-200'}`}
+                                      onClick={() => {
+                                            // DEV: O toque mágico para desbloquear o som no navegador!
+                                            playAlertSound();
+
+                                            if (!isRadarActive && tabs.length === 0) {
+                                                toast({ title: 'Aviso', description: 'Faça pelo menos uma pesquisa antes de ligar o Radar.', variant: 'info' });
+                                                return;
+                                            }
+                                            setIsRadarActive(!isRadarActive);
+                                            toast({ 
+                                                title: !isRadarActive ? 'Radar Ativado' : 'Radar Desativado', 
+                                                description: !isRadarActive ? `A monitorizar atualizações a cada ${radarIntervalMin} minutos.` : 'A monitorização automática foi pausada.',
+                                                variant: !isRadarActive ? 'success' : 'info'
+                                            });
+                                        }}
+                                        title="Ligar Monitorização Automática"
+                                    >
+                                        <Icon name="zap" className={`h-5 w-5 ${isRadarActive ? 'animate-pulse text-yellow-300' : 'text-slate-400'}`} /> 
+                                        <span className="hidden md:inline">{isRadarActive ? 'Radar ON' : 'Radar OFF'}</span>
+                                        {isRadarActive && (
+                                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                                            </span>
+                                        )}
+                                    </Button>
+
+                                    {isRadarActive && (
+                                        <select 
+                                            value={radarIntervalMin}
+                                            onChange={(e) => {
+                                                setRadarIntervalMin(Number(e.target.value));
+                                                toast({ title: 'Intervalo Atualizado', description: `O Radar atuará a cada ${e.target.value} min.`, variant: 'info'});
+                                            }}
+                                            className="h-10 pl-2 pr-6 text-xs font-bold bg-transparent text-green-800 dark:text-green-400 cursor-pointer focus:outline-none appearance-none"
+                                            title="Intervalo de busca do Radar"
+                                        >
+                                            <option value={1}>1 min</option>
+                                            <option value={5}>5 min</option>
+                                            <option value={15}>15 min</option>
+                                            <option value={30}>30 min</option>
+                                        </select>
+                                    )}
+                                </div>
+                                
+                                <Button 
+                                    variant="outline" 
+                                    className="h-12 px-4 hidden sm:flex border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30" 
+                                    onClick={() => checkForUpdates(true)} 
+                                    title="Forçar atualização de todas as abas abertas"
+                                >
+                                    <Icon name="refresh" className="h-5 w-5" />
+                                </Button>
+
+                                <Button className="h-12 px-8 w-full sm:w-auto text-base" onClick={doSearch}>
+                                    <Icon name="search" className="h-4 w-4 mr-2" /> Pesquisar
+                                </Button>
+                            </div>
+
+                            {showFilters && (
+                                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Tipo de Pesquisa</span>
+                                        <Select value={filterMatchType} onChange={e => setFilterMatchType(e.target.value)}>
+                                            <option value="approximate">Aproximada (Ignora Acentos)</option>
+                                            <option value="exact">Exata (Frase Inteira)</option>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1 relative">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Estados (UF)</span>
+                                        <Select 
+                                            value="" 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                if (val === 'CLEAR') setFilterUf([]);
+                                                else if (val && !filterUf.includes(val)) setFilterUf([...filterUf, val]);
+                                            }}
+                                        >
+                                            <option value="">{filterUf.length === 0 ? 'Todos os Estados' : '+ Adicionar Estado'}</option>
+                                            {filterUf.length > 0 && <option value="CLEAR">Limpar Filtro (Ver Todos)</option>}
+                                            <optgroup label="Selecione para adicionar:">
+                                                {ESTADOS_BR.filter(uf => !filterUf.includes(uf)).map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                                            </optgroup>
+                                        </Select>
+                                        {filterUf.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                {filterUf.map(uf => (
+                                                    <span key={uf} className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 border border-indigo-200 dark:border-indigo-700/50">
+                                                        {uf} 
+                                                        <button onClick={(e) => { e.stopPropagation(); setFilterUf(filterUf.filter(u => u !== uf)); }} className="hover:text-indigo-900 dark:hover:text-indigo-100 transition-colors">
+                                                            <Icon name="x" className="w-3 h-3" />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                   <div className="space-y-1 relative">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Esferas</span>
+                                        <Select 
+                                            value="" 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                if (val === 'CLEAR') setFilterEsfera([]);
+                                                else if (val && !filterEsfera.includes(val)) setFilterEsfera([...filterEsfera, val]);
+                                            }}
+                                        >
+                                            <option value="">{filterEsfera.length === 0 ? 'Todas as Esferas' : '+ Adicionar Esfera'}</option>
+                                            {filterEsfera.length > 0 && <option value="CLEAR">Limpar Filtro</option>}
+                                            <optgroup label="Selecione para adicionar:">
+                                                {ESFERAS.filter(esf => !filterEsfera.includes(esf)).map(esf => <option key={esf} value={esf}>{esf}</option>)}
+                                            </optgroup>
+                                        </Select>
+                                        {filterEsfera.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                {filterEsfera.map(esf => (
+                                                    <span key={esf} className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 border border-purple-200 dark:border-purple-700/50">
+                                                        {esf} 
+                                                        <button onClick={(e) => { e.stopPropagation(); setFilterEsfera(filterEsfera.filter(u => u !== esf)); }} className="hover:text-purple-900 dark:hover:text-purple-100 transition-colors">
+                                                            <Icon name="x" className="w-3 h-3" />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                   <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Palavras Negativas</span>
+                                        <div className="relative">
+                                            <Icon name="slash" className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <Input placeholder="Ex: pneu, locação (separadas por vírgula)" value={filterNegative} onChange={e => setFilterNegative(e.target.value)} className="pl-9 bg-white dark:bg-slate-950" />
+                                        </div>
+                                    </div>
+                                   <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Órgão / Entidade</span>
+                                        <div className="relative">
+                                            <Icon name="building" className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <Input placeholder="Ex: Prefeitura, Tribunal..." value={filterOrgao} onChange={e => setFilterOrgao(e.target.value)} className="pl-9 bg-white dark:bg-slate-950" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Data Inicial (Publicação)</span>
+                                        <Input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} className="h-11 bg-white dark:bg-slate-950" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Data Final (Publicação)</span>
+                                        <Input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} className="h-11 bg-white dark:bg-slate-950" />
+                                    </div>
+                                    <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
+                                        <label className="flex items-center gap-3 p-3 bg-white dark:bg-slate-950 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors border border-slate-200 dark:border-slate-800 h-11 mt-auto">
+                                            <div className="relative flex items-center">
+                                                <input type="checkbox" checked={filterVigentes} onChange={e => setFilterVigentes(e.target.checked)} className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded checked:bg-indigo-600 checked:border-indigo-600 cursor-pointer transition-all" />
+                                                <Icon name="check" className="absolute w-3.5 h-3.5 text-white left-0.5 pointer-events-none opacity-0 peer-checked:opacity-100" />
+                                            </div>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Somente Vigentes (Recebendo Propostas)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row items-start gap-6 w-full">
+                        
+                        {(tabs.length > 0 || Object.keys(favorites).length > 0 || Object.keys(archived).length > 0) && (
+                            <div className="bg-white/90 dark:bg-slate-900/90 p-5 rounded-[2rem] border border-slate-200/60 dark:border-slate-800/60 flex flex-col gap-3 backdrop-blur-xl shadow-lg w-full lg:w-[280px] shrink-0 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar">
+                                
+                                {/* Cabeçalho da Sidebar */}
+                                <div className="flex items-center gap-2 mb-1 px-1">
+                                    <Icon name="target" className="w-4 h-4 text-indigo-500" />
+                                    <h3 className="font-black text-slate-800 dark:text-slate-200 text-sm tracking-wide">Painel de Controle</h3>
+                                </div>
+
+                                {/* Botões Fixos: Favoritos e Arquivados */}
+                                {(Object.keys(favorites).length > 0 || Object.keys(archived).length > 0) && (
+                                    <div className="flex flex-col gap-2 mb-2 pb-3 border-b border-slate-200/60 dark:border-slate-800/60">
+                                        {Object.keys(favorites).length > 0 && (
+                                            <div onClick={() => { setActiveTab('FAVORITOS'); setModalityFilter('Todas'); setStatusFilter('Todas'); }}
+                                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition-all select-none
+                                                    ${activeTab === 'FAVORITOS' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white border-transparent shadow-md transform scale-[1.02]' : 'bg-white/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80 hover:border-yellow-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'}`}>
+                                                <Icon name={activeTab === 'FAVORITOS' ? "starSolid" : "star"} className="w-4 h-4 shrink-0" />
+                                                <span className="font-bold text-sm flex-1">Favoritos</span>
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${activeTab === 'FAVORITOS' ? 'bg-white/20 text-white' : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-500'}`}>{Object.keys(favorites).length}</span>
+                                            </div>
+                                        )}
+                                        
+                                        {Object.keys(archived).length > 0 && (
+                                            <div onClick={() => { setActiveTab('ARQUIVADOS'); setModalityFilter('Todas'); setStatusFilter('Todas'); }}
+                                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition-all select-none
+                                                    ${activeTab === 'ARQUIVADOS' ? 'bg-gradient-to-r from-slate-700 to-slate-900 text-white border-transparent shadow-md transform scale-[1.02] dark:from-slate-200 dark:to-slate-400 dark:text-slate-900' : 'bg-white/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                                                <Icon name="archive" className="w-4 h-4 shrink-0" />
+                                                <span className="font-bold text-sm flex-1">Arquivados</span>
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${activeTab === 'ARQUIVADOS' ? 'bg-white/20 text-white dark:bg-black/10 dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>{Object.keys(archived).length}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Título das Buscas */}
+                                {tabs.length > 0 && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Buscas Ativas</span>}
+                                
+                                {/* Lista de Abas de Busca */}
+                                <div className="flex flex-col gap-2">
+                                    {[...tabs].sort((a, b) => {
+                                        const aItems = a.items || []; 
+                                        const bItems = b.items || [];
+                                        const aTemNovo = aItems.some(i => i.isNewFromRadar && !archived[i.id] && !favorites[i.id]);
+                                        const bTemNovo = bItems.some(i => i.isNewFromRadar && !archived[i.id] && !favorites[i.id]);
+                                        if (aTemNovo && !bTemNovo) return -1; 
+                                        if (!aTemNovo && bTemNovo) return 1;  
+                                        return 0; 
+                                   }).map(tab => {
+                                        // DEV SENIOR: Proteção (tab.items || []) evita o crash da tela branca!
+                                        const hasNews = (tab.items || []).some(i => i.isNewFromRadar && !archived[i.id] && !favorites[i.id]);
+                                        const isActive = activeTab === tab.keyword;
+                                        const count = (tab.items || []).filter(i => !archived[i.id] && !favorites[i.id]).length;
+                                        
+                                        // DEV SENIOR: Proteção extra para filtros antigos
+                                        const isFiltered = tab.filters && (tab.filters.vigentes || (tab.filters.uf && tab.filters.uf.length > 0) || (Array.isArray(tab.filters.esfera) ? tab.filters.esfera.length > 0 : tab.filters.esfera !== 'Todas') || tab.filters.negative || tab.filters.dateStart || tab.filters.matchType === 'exact');
+
+                                        return (
+                                            <div key={tab.keyword}
+                                                onClick={() => { 
+                                                    setActiveTab(tab.keyword); setModalityFilter('Todas'); setStatusFilter('Todas'); 
+                                                    if (tab.filters) { 
+                                                        setFilterMatchType(tab.filters.matchType || 'approximate');
+                                                        setFilterVigentes(tab.filters.vigentes); 
+                                                        setFilterUf(tab.filters.uf || []); 
+                                                        setFilterEsfera(Array.isArray(tab.filters.esfera) ? tab.filters.esfera : []); 
+                                                        setFilterNegative(tab.filters.negative);
+                                                        setFilterDateStart(tab.filters.dateStart); 
+                                                        setFilterDateEnd(tab.filters.dateEnd); 
+                                                    }
+                                                }}
+                                                className={`group flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-all select-none relative overflow-hidden
+                                                    ${hasNews 
+                                                        ? 'bg-blue-500 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse' 
+                                                        : isActive 
+                                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 shadow-sm' 
+                                                            : 'bg-white dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700/50'}`}>
+                                                
+                                                {isActive && !hasNews && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l-xl"></div>}
+
+                                                <div className="flex flex-col flex-1 min-w-0 pl-1">
+                                                    <span className={`font-bold text-[13px] capitalize truncate ${isActive && !hasNews ? 'text-indigo-700 dark:text-indigo-400' : ''}`} title={tab.keyword}>{tab.keyword}</span>
+                                                    {isFiltered && <span className={`text-[9px] uppercase font-black tracking-wider ${hasNews ? 'text-blue-200' : 'text-slate-400 dark:text-slate-500'} mt-0.5`}>Filtrado</span>}
+                                                </div>
+                                                
+                                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0 
+                                                    ${hasNews ? 'bg-white/20 text-white' : isActive ? 'bg-indigo-100 dark:bg-indigo-800/50 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                                                    {count}
+                                                </span>
+                                                
+                                                <button onClick={(e) => closeTab(tab.keyword, e)} 
+                                                    className={`p-1 rounded-md shrink-0 transition-colors opacity-60 group-hover:opacity-100
+                                                    ${hasNews ? 'hover:bg-white/20 text-white' : 'hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 text-slate-400'}`}>
+                                                    <Icon name="x" className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Botões de Ação na Base */}
+                                <div className="flex flex-col gap-2 w-full mt-2 pt-4 border-t border-slate-200/60 dark:border-slate-800/60">
+                                    {Object.keys(archived).length > 0 && (
+                                        <button onClick={() => {
+                                                if (window.confirm("Deseja restaurar todos os editais arquivados? Eles voltarão a aparecer em novas buscas.")) {
+                                                    setArchived({});
+                                                    localStorage.removeItem('licitahub-archived');
+                                                    toast({ title: 'Arquivo Limpo', description: 'Todos os editais arquivados foram restaurados.', variant: 'success' });
+                                                }
+                                            }}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors border border-dashed border-indigo-200 dark:border-indigo-800/50"
+                                            title="Restaurar editais arquivados">
+                                            <Icon name="archive" className="w-3.5 h-3.5" /> Restaurar Tudo ({Object.keys(archived).length})
+                                        </button>
+                                    )}
+
+                                    {tabs.length > 0 && (
+                                        <button onClick={() => {
+                                                if(window.confirm("Fechar todas as abas de pesquisa? (Os favoritos serão mantidos)")) {
+                                                    setTabs([]);
+                                                    setActiveTab(Object.keys(favorites).length > 0 ? 'FAVORITOS' : null);
+                                                    localStorage.removeItem('licitahub-tabs');
+                                                    toast({ title: 'Limpeza Concluída', description: 'Todas as abas de pesquisa foram fechadas.', variant: 'success' });
+                                                }
+                                            }}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-[11px] font-bold text-slate-500 hover:text-red-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                                            title="Fechar todas as abas de pesquisa">
+                                            <Icon name="trash" className="w-3.5 h-3.5" /> Limpar Todas as Buscas
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex-1 w-full min-w-0">
+                        {!currentTabObj && !isFavoritesView && !isArchivedView ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400 opacity-95 bg-white/80 dark:bg-slate-900/80 rounded-3xl backdrop-blur-md border border-white/40 dark:border-slate-800/50 shadow-xl">
+                                <div className="h-20 w-20 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm mb-6">
+                                    <Icon name="search" className="h-10 w-10 text-indigo-500/50" />
+                                </div>
+                                <h2 className="text-2xl font-black text-slate-800 dark:text-slate-200 tracking-tight">O Painel está pronto.</h2>
+                                <p className="text-sm mt-3 text-center max-w-sm font-medium leading-relaxed">Insira uma palavra-chave e aplique os filtros desejados para buscar editais oficiais de todo o Brasil.</p>
+                            </div>
+                        ) : currentTabObj?.loading ? (
+                            <div className="flex flex-col items-center justify-center py-20 bg-white/80 dark:bg-slate-900/80 rounded-3xl backdrop-blur-md border border-white/40 dark:border-slate-800/50 animate-pulse shadow-xl">
+                                <div className="h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center mb-6 shadow-inner">
+                                    <Icon name="search" className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-bounce" />
+                                </div>
+                                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">A contactar os Portais Oficiais...</h2>
+                                <p className="text-sm text-slate-500">Conectando ao PNCP e Compras.gov.br</p>
+                                <div className="grid md:grid-cols-2 gap-4 mt-8 w-full px-10 opacity-40">{[1,2].map(i => <div key={i} className="h-48 bg-slate-200 dark:bg-slate-800 rounded-3xl"></div>)}</div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="flex flex-col gap-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
+                                    <div className="flex items-center gap-2 px-2 border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            <Icon name={isFavoritesView ? "starSolid" : "trending"} className={`h-5 w-5 ${isFavoritesView ? "text-yellow-500" : "text-indigo-500"}`} />
+                                            <h2 className="font-bold text-sm text-slate-600 dark:text-slate-300">
+                                                A exibir <span className={`text-base ${isFavoritesView ? "text-yellow-600" : "text-indigo-600 dark:text-indigo-400"}`}>{displayedItems.length}</span> {isFavoritesView ? 'favoritos' : 'resultados'}
+                                            </h2>
+                                        </div>
+
+                                       <div className="ml-auto flex flex-wrap items-center gap-2">
+                                            
+                                            {/* NOVO: Botão de Exportar para Excel */}
+                                            {displayedItems.length > 0 && (
+                                                <button onClick={exportToExcel} className="flex items-center gap-1.5 text-[11px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1.5 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-800/50 transition-colors shadow-sm mr-2" title="Baixar lista em Excel">
+                                                    <Icon name="database" className="w-3.5 h-3.5" /> Exportar Excel
+                                                </button>
+                                            )}
+
+                                            {isArchivedView && (
+                                                <div className="relative mr-3 w-full sm:w-56">
+                                                    <Icon name="search" className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <Input 
+                                                        placeholder="Pesquisar nos arquivos..." 
+                                                        value={localSearch} 
+                                                        onChange={e => setLocalSearch(e.target.value)} 
+                                                        className="pl-9 h-9 text-xs py-0"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {!isFavoritesView && !isArchivedView && displayedItems.length > 0 && (
+                                                <label className="flex items-center gap-2 mr-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded-lg transition-colors">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-4 h-4 cursor-pointer accent-indigo-600 rounded border-slate-300"
+                                                        checked={allDisplayedSelected}
+                                                        onChange={toggleSelectAll}
+                                                    />
+                                                    <span className="text-[11px] font-bold text-slate-500">Selecionar Todos</span>
+                                                </label>
+                                            )}
+
+                                            {!isFavoritesView && selectedItems.size > 0 && (
+                                                <button 
+                                                    onClick={handleArchiveSelected}
+                                                    className="flex items-center gap-1.5 text-[11px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors shadow-sm"
+                                                    title={`Arquivar ${selectedItems.size} resultados selecionados`}
+                                                >
+                                                    <Icon name="archive" className="w-3.5 h-3.5" /> Arquivar Selecionados ({selectedItems.size})
+                                                </button>
+                                            )}
+
+                                            {!isFavoritesView && displayedItems.some(i => i.isNewFromRadar) && (
+                                                <button 
+                                                    onClick={() => {
+                                                        setTabs(prev => prev.map(t => t.keyword === activeTab ? {
+                                                            ...t, 
+                                                            items: t.items.map(i => ({...i, isNewFromRadar: false}))
+                                                        } : t));
+                                                    }}
+                                                    className="flex items-center gap-1.5 text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-lg hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors shadow-sm"
+                                                >
+                                                    <Icon name="check" className="w-3.5 h-3.5" /> Marcar como Vistos
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-4 px-2">
+                                        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 custom-scrollbar">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 shrink-0">Modalidade:</span>
+                                            {uniqueModalities.map(mod => (
+                                                <button key={mod} onClick={() => setModalityFilter(mod)} 
+                                                    className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border whitespace-nowrap transition-colors
+                                                    ${modalityFilter === mod ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 border-indigo-200 dark:border-indigo-800' : 'bg-transparent text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                                                    {mod}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 custom-scrollbar">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 shrink-0">Situação:</span>
+                                            {uniqueStatuses.map(sit => (
+                                                <button key={sit} onClick={() => setStatusFilter(sit)} 
+                                                    className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border whitespace-nowrap transition-colors
+                                                    ${statusFilter === sit ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-200 dark:text-slate-900' : 'bg-transparent text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                                                    {sit}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {displayedItems.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-10 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
+                                        <p className="text-slate-500 font-medium">Nenhum edital encontrado com os filtros atuais.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
+                                        {displayedItems.map(item => {
+                                            const favObj = favorites[item.id];
+                                            const isFav = !!favObj;
+                                            const updateAlert = favObj?.updateAlert; 
+                                            const capagNote = getCapagNote(item.orgaoEntidade?.razaoSocial);
+                                            const isSelected = selectedItems.has(item.id);
+
+                                            return (
+                                                <div key={item.id} 
+                                                    className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-5 rounded-3xl border transition-all flex flex-col justify-between relative 
+                                                    ${isSelected ? 'border-indigo-500 shadow-md ring-1 ring-indigo-500/50 scale-[1.01]' : 
+                                                    updateAlert ? 'border-orange-300 dark:border-orange-700 shadow-md' : 
+                                                    (item.isNewFromRadar ? 'border-green-400 dark:border-green-500 shadow-lg shadow-green-500/20' : 'border-slate-200/60 dark:border-slate-800/60 hover:border-indigo-400')}`}
+                                                >
+                                                    
+                                                    {item.isNewFromRadar && (
+                                                        <div className="absolute -top-3 -right-3 bg-green-500 text-white p-1.5 rounded-full shadow-lg animate-bounce z-10" title="Novidade encontrada pelo Radar!">
+                                                            <Icon name="target" className="h-5 w-5" />
+                                                        </div>
+                                                    )}
+
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-3 gap-2">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                {!isFavoritesView && (
+                                                                    <div className="flex items-center justify-center p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-colors" onClick={() => toggleSelect(item.id)}>
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isSelected}
+                                                                            readOnly
+                                                                            className="w-4 h-4 cursor-pointer accent-indigo-600 rounded border-slate-300 shadow-sm"
+                                                                            title="Selecionar para arquivar"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                <span className="text-[10px] font-bold px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 uppercase tracking-widest rounded-lg border border-indigo-100 dark:border-indigo-800/50">
+                                                                    {item.modalidadeNome}
+                                                                </span>
+                                                                <span className={`text-[10px] font-bold px-2.5 py-1 uppercase tracking-widest rounded-lg ${getStatusColor(item.situacao)}`}>
+                                                                    {item.situacao}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center gap-1 shrink-0 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-100 dark:border-slate-700/50">
+                                                                {!isFavoritesView && (
+                                                                    <button onClick={() => handleArchiveItem(item)} className="transition-colors p-1.5 rounded-full text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-700 shadow-sm" title="Arquivar Edital (Ocultar permanentemente)">
+                                                                        <Icon name="archive" className="h-4 w-4" />
+                                                                    </button>
+                                                                )}
+                                                                <button onClick={() => handleFavorite(item)} className={`transition-colors p-1.5 rounded-full shadow-sm ${isFav ? 'text-yellow-500 bg-white dark:bg-slate-700' : 'text-slate-400 hover:text-yellow-500 hover:bg-white dark:hover:bg-slate-700'}`} title="Favoritar">
+                                                                    <Icon name={isFav ? "starSolid" : "star"} className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <h3 className="font-black text-indigo-700 dark:text-indigo-400 text-base mb-2 cursor-pointer hover:underline" onClick={() => !isFavoritesView && toggleSelect(item.id)}>
+                                                            {item.tituloBusca}
+                                                        </h3>
+
+                                                        <div className="bg-slate-50/80 dark:bg-slate-800/40 p-5 rounded-2xl mb-4 border border-slate-100 dark:border-slate-800/50 shadow-inner">
+                                                            <h4 className="font-serif text-[15px] sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed text-justify">
+                                                                <HighlightedText text={item.objetoCompra} highlight={!isFavoritesView ? activeTab : (item.keywordOrigin || '')} matchType={!isFavoritesView ? (currentTabObj?.filters?.matchType || 'approximate') : 'approximate'} />
+                                                            </h4>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between gap-2 mb-4">
+                                                            <div className="text-xs font-bold text-slate-500 flex items-center flex-wrap gap-2">
+                                                                {item.uf && (
+                                                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 uppercase tracking-widest rounded border border-emerald-100 dark:border-emerald-800/50 flex items-center gap-1" title="Estado / UF">
+                                                                        <Icon name="mapPin" className="h-3 w-3" /> {item.uf}
+                                                                    </span>
+                                                                )}
+                                                                {item.esfera && (
+                                                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 uppercase tracking-widest rounded border border-purple-100 dark:border-purple-800/50 flex items-center gap-1" title="Esfera Governamental">
+                                                                        <Icon name="building" className="h-3 w-3" /> {item.esfera}
+                                                                    </span>
+                                                                )}
+                                                                <span className="flex items-center gap-1">
+                                                                    <Icon name="database" className="h-3 w-3 shrink-0" /> {item.orgaoEntidade?.razaoSocial}
+                                                                </span>
+                                                            </div>
+                                                            {capagNote && (
+                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 shrink-0 ml-auto ${getCapagColor(capagNote)}`} title="Nota CAPAG Analítica">
+                                                                    <Icon name="shield" className="h-3 w-3" /> CAPAG {capagNote}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-2 mb-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                            <div className="flex flex-col text-[11px]">
+                                                                <span className="flex items-center gap-1.5 font-bold text-slate-400 uppercase tracking-wider mb-0.5"><Icon name="calendar" className="h-3.5 w-3.5"/> Publicado em:</span>
+                                                                <span className="font-bold text-slate-700 dark:text-slate-300 ml-5">{item.dataPublicacao}</span>
+                                                            </div>
+                                                            <div className="flex flex-col text-[11px]">
+                                                                <span className="flex items-center gap-1.5 font-bold text-slate-400 uppercase tracking-wider mb-0.5"><Icon name="clock" className="h-3.5 w-3.5"/> Data de início de receção de propostas:</span>
+                                                                <span className="font-bold text-indigo-600 dark:text-indigo-400 ml-5">{item.dataIncioRecebimento}</span>
+                                                            </div>
+                                                            <div className="flex flex-col text-[11px]">
+                                                                <span className="flex items-center gap-1.5 font-bold text-slate-400 uppercase tracking-wider mb-0.5"><Icon name="clock" className="h-3.5 w-3.5"/> Data fim de receção de propostas:</span>
+                                                                <span className="font-bold text-orange-600 dark:text-orange-400 ml-5">{item.dataFimRecebimento}</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                            {item.idContratacaoPncp ? (
+                                                                <span><strong>Id contratação PNCP:</strong> {item.idContratacaoPncp}</span>
+                                                            ) : (
+                                                                <span><strong>Contratação Externa</strong></span>
+                                                            )}
+                                                            <span className="text-[10px] font-bold px-2 py-1 bg-blue-600 text-white uppercase tracking-widest rounded shadow-sm shrink-0">
+                                                                Fonte: {item.sistema}
+                                                            </span>
+                                                        </div>
+
+                                                        {updateAlert && (
+                                                            <div className="mb-2 px-3 py-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/50 rounded-xl flex items-start gap-2">
+                                                                <Icon name="alert" className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                                                                <span className="text-xs text-orange-700 dark:text-orange-400 font-bold leading-tight">{updateAlert}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                   <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center mt-auto">
+                                                        <span className="font-black text-lg text-slate-900 dark:text-white">
+                                                            {Number(item.valorTotalEstimado) > 0 ? `R$ ${Number(item.valorTotalEstimado).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'Valor não informado'}
+                                                        </span>
+                                                      {item.linkSistemaOrigem && (
+                                                            <a href={item.linkSistemaOrigem} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
+                                                                Aceder ao Edital
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                              )}
+                            </div>
+                        )}
+                    </div>
+                        </div>
+                        
+                      {/* INÍCIO DO SMART HUB IRP/ATAS */}
+                        {showIrpModal && (
+                            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/80 backdrop-blur-md transition-all p-0 sm:p-4">
+                                <div className={`bg-white dark:bg-slate-900 flex flex-col sm:flex-row overflow-hidden shadow-2xl transition-all duration-300 border-slate-200 dark:border-slate-800 ${isIrpFullscreen ? 'w-full h-full rounded-none border-0' : 'w-full h-[95vh] sm:w-[95vw] sm:h-[90vh] max-w-7xl rounded-3xl border'}`}>
+                                    
+                                    {/* MENU LATERAL TÁTICO */}
+                                    <div className="w-full sm:w-72 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 transition-all">
+                                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-orange-100 dark:bg-orange-900/50 rounded-lg text-orange-600">
+                                                    <Icon name="database" className="w-4 h-4" />
+                                                </div>
+                                                <h3 className="font-black text-slate-800 dark:text-white text-sm">Smart Hub</h3>
+                                            </div>
+                                            {/* Botão fechar (visível só no mobile) */}
+                                            <button onClick={() => setShowIrpModal(false)} className="sm:hidden p-1.5 text-slate-400 hover:text-red-500 rounded-lg bg-slate-100 dark:bg-slate-800">
+                                                <Icon name="x" className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        <div className="p-3 flex flex-col gap-2 overflow-y-auto">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1">Sistemas Oficiais</span>
+                                            
+                                            {/* BOTÃO 1: ATAS SIASG (Roda no Iframe) */}
+                                            <button onClick={() => setIrpUrl('https://www2.comprasnet.gov.br/siasgnet-atasrp/public/pesquisarFornecimento.do?method=iniciar')} 
+                                                className={`text-left text-xs font-bold p-3 rounded-xl transition-all flex items-center gap-2 ${irpUrl.includes('atasrp') ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+                                                <Icon name="search" className="w-4 h-4 shrink-0" /> Pesquisar Atas (SRP)
+                                            </button>
+                                            
+                                            {/* BOTÃO 2: IRP SIASG (Roda no Iframe) */}
+                                            <button onClick={() => setIrpUrl('https://www2.comprasnet.gov.br/siasgnet-irp/consultarIRPComprasNet.do?method=iniciar')} 
+                                                className={`text-left text-xs font-bold p-3 rounded-xl transition-all flex items-center gap-2 ${irpUrl.includes('consultarIRPComprasNet') ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+                                                <Icon name="target" className="w-4 h-4 shrink-0" /> Consultar IRPs
+                                            </button>
+                                            
+                                            {/* BOTÃO 3: PNCP (Abre em Nova Aba devido a bloqueio do Governo) */}
+                                            <button onClick={() => window.open('https://pncp.gov.br/app/atas', '_blank')} 
+                                                className="text-left text-xs font-bold p-3 rounded-xl transition-all flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300" title="Abre externamente">
+                                                <Icon name="check" className="w-4 h-4 shrink-0" /> Painel de Atas (PNCP)
+                                                <Icon name="login" className="w-3 h-3 ml-auto opacity-50" />
+                                            </button>
+
+                                            <div className="mt-4 border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col flex-1">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2 flex items-center gap-1">
+                                                    <Icon name="save" className="w-3 h-3" /> Bloco de Notas Tático
+                                                </span>
+                                                <textarea 
+                                                    value={irpNotes}
+                                                    onChange={(e) => setIrpNotes(e.target.value)}
+                                                    placeholder="Cole aqui CNPJs, UASGs ou Códigos de Itens para usar no sistema ao lado..."
+                                                    className="w-full flex-1 min-h-[150px] sm:min-h-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none resize-none shadow-inner custom-scrollbar"
+                                                ></textarea>
+                                                <p className="text-[9px] text-slate-400 text-center mt-2">Salva automaticamente no seu PC.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* ÁREA DO NAVEGADOR (IFRAME) */}
+                                    <div className="flex-1 flex flex-col relative bg-slate-200 dark:bg-slate-800">
+                                        
+                                        {/* Barra de Ferramentas Superior */}
+                                        <div className="h-12 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3">
+                                            <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 font-medium truncate max-w-[50%] sm:max-w-none bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                                                <Icon name="shield" className="w-3 h-3 text-green-500 shrink-0" />
+                                                <span className="truncate">{irpUrl}</span>
+                                            </div>
+
+                                            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                                                <a href={irpUrl} target="_blank" className="text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 sm:px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1" title="Forçar abertura em nova aba caso o Governo bloqueie a tela">
+                                                    <Icon name="login" className="w-3 h-3" /> <span className="hidden sm:inline">Abrir Externo</span>
+                                                </a>
+                                                
+                                                <button onClick={() => setIsIrpFullscreen(!isIrpFullscreen)} className="p-1.5 sm:px-3 sm:py-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-lg flex items-center gap-1 border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
+                                                    <Icon name="dashboard" className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{isIrpFullscreen ? 'Restaurar Tela' : 'Tela Cheia'}</span>
+                                                </button>
+
+                                                <button onClick={() => setShowIrpModal(false)} className="hidden sm:flex p-1.5 sm:px-3 sm:py-1.5 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 transition-colors rounded-lg items-center gap-1 shadow-sm ml-2">
+                                                    <Icon name="x" className="w-3.5 h-3.5" /> Fechar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* O Iframe */}
+                                        <div className="flex-1 relative w-full h-full bg-white">
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 pointer-events-none z-0 bg-slate-50 dark:bg-slate-900">
+                                                <Icon name="refresh" className="w-8 h-8 animate-spin mb-3 text-slate-300" />
+                                                <span className="text-sm font-bold text-slate-500">Conectando ao banco de dados federal...</span>
+                                                <span className="text-xs max-w-sm text-center mt-2 opacity-70">Se esta tela continuar cinza/branca, o servidor do governo bloqueou a visualização embutida. Clique em "Abrir Externo" lá em cima.</span>
+                                            </div>
+                                            
+                                            <iframe 
+                                                key={irpUrl}
+                                                src={irpUrl} 
+                                                className="relative z-10 w-full h-full border-0 bg-white"
+                                                title="Navegador Interno"
+                                                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                                            ></iframe>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/* FIM DO SMART HUB IRP/ATAS */}
+
+                    </main>
+                </div>
+            );
+        };
+
+       const App = () => {
+            const [currentUser, setCurrentUser] = useState(() => {
+                const saved = sessionStorage.getItem('lb-user');
+                return saved ? JSON.parse(saved) : null;
+            });
+            const { toasts, dismiss } = useToast();
+            
+            const handleLogin = (userObj) => { 
+                sessionStorage.setItem('lb-user', JSON.stringify(userObj)); 
+                setCurrentUser(userObj); 
+            };
+            const handleLogout = () => { 
+                sessionStorage.removeItem('lb-user'); 
+                setCurrentUser(null); 
+            };
+
+            const [bgConfig, setBgConfig] = useState(() => {
+                const saved = localStorage.getItem('licitahub-bg');
+                return saved ? JSON.parse(saved) : { url: '', opacity: 0.15 };
+            });
+
+            useEffect(() => {
+                try {
+                    localStorage.setItem('licitahub-bg', JSON.stringify(bgConfig));
+                } catch (e) {}
+            }, [bgConfig]);
+
+            return (
+                <div className={`flex-1 flex flex-col h-full w-full relative min-h-screen transition-colors duration-300 ${bgConfig.url ? 'bg-transparent' : 'bg-slate-50 dark:bg-slate-950'}`}>
+                    {bgConfig.url && (
+                        <div 
+                            className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-opacity duration-500"
+                            style={{ backgroundImage: `url("${bgConfig.url}")`, opacity: bgConfig.opacity }}
+                        />
+                    )}
+                    
+                    <div className="flex-1 flex flex-col relative z-10 w-full h-full">
+                      {currentUser ? <Dashboard onLogout={handleLogout} bgConfig={bgConfig} setBgConfig={setBgConfig} currentUser={currentUser} /> : <Login onLogin={handleLogin} />}
+                        
+                        <div className="fixed bottom-0 right-0 p-4 sm:p-6 z-[9999] flex flex-col items-end pointer-events-none">
+                          {toasts.map((t) => (
+                                <div key={t.id} className={`pointer-events-auto transform transition-all duration-300 mb-3 ${t.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+                                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 min-w-[300px] flex items-start gap-3 relative overflow-hidden">
+                                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${t.variant === 'destructive' ? 'bg-red-500' : t.variant === 'success' ? 'bg-green-500' : 'bg-indigo-500'}`} />
+                                        <div className="mt-0.5">
+                                            {t.variant === 'destructive' ? <Icon name="alert" className="h-5 w-5 text-red-500" /> : <Icon name="check" className="h-5 w-5 text-indigo-500" />}
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="text-sm font-bold">{t.title}</h4>
+                                            {t.description && <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>}
+                                        </div>
+                                        <button onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-700 transition-colors"><Icon name="x" className="h-4 w-4" /></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
