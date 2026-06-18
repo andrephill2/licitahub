@@ -7,7 +7,7 @@
     
     <script>
         window.EMBEDDED_USERS = [
-            { id: 'admin-master', username: 'andre.philipe', password: 'masterclass', role: 'master', expirationDate: '2099-12-31' }
+            { id: 'admin-master', username: 'andre.philipe', passwordHash: '22cfdf386b9da44a9a9df04c246bf0d325efba71c88ad9c8a637d411241a6e67', role: 'master', expirationDate: '2099-12-31' }
         ];
     </script>
 
@@ -43,7 +43,7 @@
     </style>
 </head>
 <body class="font-sans antialiased min-h-screen flex flex-col">
-    <div id="root" class="flex-1 flex flex-col min-h-screen"></div>
+    <div id="root" class="flex-1 flex flex-col min-h-screen"><div id="initial-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:Georgia,serif;color:#4f46e5;gap:16px"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style><p style="font-size:13px;letter-spacing:.08em;opacity:.7">Carregando LicitaHub...</p></div></div>
 <script type="text/babel">
         document.addEventListener('contextmenu', e => e.preventDefault());
         window.addEventListener('keydown', function(e) {
@@ -883,7 +883,8 @@
                     console.log("Nuvem inacessível no momento, usando cache local."); 
                 }
 
-                const foundUser = users.find(u => u.username.toLowerCase() === user.trim().toLowerCase() && u.password === pass.trim());
+                const inputHash = await (async () => { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass.trim())); return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join(''); })();
+                const foundUser = users.find(u => { if (u.username.toLowerCase() !== user.trim().toLowerCase()) return false; if (u.passwordHash) return u.passwordHash === inputHash; return u.password === pass.trim(); });
 
                 if (foundUser) {
                     if (foundUser.role !== 'master' && foundUser.expirationDate) {
