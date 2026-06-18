@@ -1364,6 +1364,404 @@ const Login = ({
     className: "h-5 w-5"
   }), " Entrar no Sistema")))));
 };
+
+const AnaliseConcorrentes = () => {
+  const fmtCnpj = v => {
+    const d = v.replace(/\D/g, '').slice(0, 14);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return d.slice(0, 2) + '.' + d.slice(2);
+    if (d.length <= 8) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5);
+    if (d.length <= 12) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8);
+    return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12) + '-' + d.slice(12);
+  };
+  const fmtMoney = v => !v ? '—' : new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    notation: 'compact',
+    maximumFractionDigits: 1
+  }).format(v);
+  const fmtDate = s => s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-BR') : '—';
+  const [cnpjInput, setCnpjInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('lh-watchlist') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+  const [transpKey, setTranspKey] = useState(() => localStorage.getItem('lh-transp-key') || '');
+  const [keyDraft, setKeyDraft] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [monitoring, setMonitoring] = useState(false);
+  const [alerts, setAlerts] = useState({});
+  const {
+    toast
+  } = useToast();
+  const fetchAll = async cnpj14 => {
+    const key = localStorage.getItem('lh-transp-key') || '';
+    const hdrs = key ? {
+      'chave-api-dados': key
+    } : {};
+    const [rfR, ceisR, cnepR, pncpR] = await Promise.allSettled([fetch(`https://publica.cnpj.ws/cnpj/${cnpj14}`).then(r => r.ok ? r.json() : Promise.reject('CNPJ não encontrado na Receita Federal')), key ? fetch(`https://api.portaldatransparencia.gov.br/api-de-dados/ceis?cnpjSancionado=${cnpj14}&pagina=1&tamanhoPagina=50`, {
+      headers: hdrs
+    }).then(r => r.ok ? r.json() : []).catch(() => []) : Promise.resolve(null), key ? fetch(`https://api.portaldatransparencia.gov.br/api-de-dados/cnep?cnpjSancionado=${cnpj14}&pagina=1&tamanhoPagina=50`, {
+      headers: hdrs
+    }).then(r => r.ok ? r.json() : []).catch(() => []) : Promise.resolve(null), fetch(`https://pncp.gov.br/api/pncp/v1/contratos?cnpjFornecedor=${cnpj14}&pagina=1&tamanhoPagina=10`).then(r => r.ok ? r.json() : {
+      data: []
+    }).catch(() => ({
+      data: []
+    }))]);
+    if (rfR.status === 'rejected') throw new Error(rfR.reason || 'Erro Receita Federal');
+    const rf = rfR.value;
+    const ceis = Array.isArray(ceisR.value) ? ceisR.value : [];
+    const cnep = Array.isArray(cnepR.value) ? cnepR.value : [];
+    const pd = pncpR.value;
+    const contratos = Array.isArray(pd) ? pd : pd?.data || [];
+    const now = new Date();
+    const sancaoAtiva = ceis.some(s => !s.dataFimSancao || new Date(s.dataFimSancao) > now);
+    const multaAtiva = cnep.some(s => !s.dataFimSancao || new Date(s.dataFimSancao) > now);
+    const ativa = rf.estabelecimento?.situacao_cadastral === 'Ativa';
+    let veredicto = 'APTA';
+    if (!ativa || sancaoAtiva) veredicto = 'INAPTA';else if (multaAtiva || ceis.length > 0 || cnep.length > 0) veredicto = 'ATENCAO';
+    return {
+      rf,
+      ceis,
+      cnep,
+      contratos,
+      veredicto,
+      ceisOk: ceisR.value !== null,
+      cnepOk: cnepR.value !== null,
+      checkedAt: new Date().toISOString(),
+      totalContratos: contratos.reduce((s, c) => s + (c.valorInicial || c.valorGlobal || 0), 0)
+    };
+  };
+  const buscar = async () => {
+    const c = cnpjInput.replace(/\D/g, '');
+    if (c.length !== 14) return;
+    setLoading(true);
+    setResult(null);
+    setError(null);
+    try {
+      setResult(await fetchAll(c));
+    } catch (e) {
+      setError(e.message || 'Erro ao buscar dados');
+    }
+    setLoading(false);
+  };
+  const salvar = () => {
+    if (!result) return;
+    const c = cnpjInput.replace(/\D/g, '');
+    const entry = {
+      cnpj: c,
+      razaoSocial: result.rf.razao_social,
+      veredicto: result.veredicto,
+      checkedAt: result.checkedAt,
+      ceis: result.ceis.length,
+      cnep: result.cnep.length,
+      contratos: result.contratos.length
+    };
+    const upd = [entry, ...saved.filter(s => s.cnpj !== c)];
+    setSaved(upd);
+    localStorage.setItem('lh-watchlist', JSON.stringify(upd));
+    toast({
+      title: 'Empresa adicionada ao monitoramento',
+      description: result.rf.razao_social,
+      variant: 'success'
+    });
+  };
+  const remover = cnpj => {
+    const upd = saved.filter(s => s.cnpj !== cnpj);
+    setSaved(upd);
+    localStorage.setItem('lh-watchlist', JSON.stringify(upd));
+  };
+  const monitorar = async () => {
+    if (!saved.length) return;
+    setMonitoring(true);
+    const newAlerts = {};
+    const upd = [...saved];
+    for (let i = 0; i < upd.length; i++) {
+      const c = upd[i];
+      try {
+        const fresh = await fetchAll(c.cnpj);
+        const ch = [];
+        if (fresh.ceis.length > c.ceis) ch.push(`+${fresh.ceis.length - c.ceis} sanção CEIS`);
+        if (fresh.cnep.length > c.cnep) ch.push(`+${fresh.cnep.length - c.cnep} multa CNEP`);
+        if (fresh.contratos.length > c.contratos) ch.push(`+${fresh.contratos.length - c.contratos} contrato novo`);
+        if (fresh.veredicto !== c.veredicto) ch.push(`Status: ${c.veredicto} → ${fresh.veredicto}`);
+        if (ch.length) newAlerts[c.cnpj] = ch;
+        upd[i] = {
+          ...c,
+          veredicto: fresh.veredicto,
+          checkedAt: fresh.checkedAt,
+          ceis: fresh.ceis.length,
+          cnep: fresh.cnep.length,
+          contratos: fresh.contratos.length
+        };
+      } catch (e) {}
+    }
+    setSaved(upd);
+    localStorage.setItem('lh-watchlist', JSON.stringify(upd));
+    setAlerts(newAlerts);
+    setMonitoring(false);
+    if (Object.keys(newAlerts).length) toast({
+      title: `${Object.keys(newAlerts).length} empresa(s) com alterações detectadas`,
+      variant: 'destructive'
+    });
+  };
+  useEffect(() => {
+    if (saved.length > 0) monitorar();
+  }, []);
+  const vCls = {
+    APTA: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-300 dark:border-green-700',
+    ATENCAO: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700',
+    INAPTA: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-300 dark:border-red-700'
+  };
+  const vIcon = {
+    APTA: 'check',
+    ATENCAO: 'alert',
+    INAPTA: 'x'
+  };
+  const vLabel = {
+    APTA: 'APTA',
+    ATENCAO: 'ATENÇÃO',
+    INAPTA: 'INAPTA'
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 flex gap-0 overflow-auto"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-0 max-w-[98%] mx-auto px-4 py-6 flex gap-5"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-0 space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm p-5"
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "building",
+    className: "h-4 w-4 text-indigo-500"
+  }), "Análise de Concorrente por CNPJ"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: cnpjInput,
+    onChange: e => setCnpjInput(fmtCnpj(e.target.value)),
+    onKeyDown: e => e.key === 'Enter' && buscar(),
+    placeholder: "00.000.000/0000-00",
+    className: "flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: buscar,
+    disabled: loading || cnpjInput.replace(/\D/g, '').length !== 14,
+    className: "px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+  }, loading ? 'Buscando...' : 'Analisar')), !transpKey && /*#__PURE__*/React.createElement("div", {
+    className: "mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-xs"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-amber-700 dark:text-amber-400 font-semibold mb-1"
+  }, "⚡ Configure a chave gratuita do Portal da Transparência para consultar sanções (CEIS/CNEP)"), showKey ? /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mt-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: keyDraft,
+    onChange: e => setKeyDraft(e.target.value),
+    placeholder: "Cole a chave aqui",
+    className: "flex-1 px-2 py-1 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-slate-800 text-xs"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      localStorage.setItem('lh-transp-key', keyDraft);
+      setTranspKey(keyDraft);
+      setShowKey(false);
+      toast({
+        title: 'Chave salva com sucesso',
+        variant: 'success'
+      });
+    },
+    className: "px-3 py-1 bg-amber-600 text-white rounded text-xs font-medium"
+  }, "Salvar")) : /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-4 mt-1"
+  }, /*#__PURE__*/React.createElement("a", {
+    href: "https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email",
+    target: "_blank",
+    rel: "noreferrer",
+    className: "text-amber-600 dark:text-amber-400 underline"
+  }, "Obter chave grátis →"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowKey(true),
+    className: "text-amber-600 dark:text-amber-400 underline"
+  }, "Já tenho minha chave")))), error && /*#__PURE__*/React.createElement("div", {
+    className: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-red-700 dark:text-red-400 text-sm"
+  }, error), loading && /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-10 flex flex-col items-center gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-slate-500"
+  }, "Consultando Receita Federal, PNCP e Portal da Transparência...")), result && !loading && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: `rounded-2xl border p-4 flex items-center justify-between gap-3 ${vCls[result.veredicto]}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: vIcon[result.veredicto],
+    className: "h-6 w-6 shrink-0"
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    className: "text-lg font-bold leading-tight"
+  }, vLabel[result.veredicto]), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm opacity-75 leading-snug"
+  }, result.rf.razao_social))), /*#__PURE__*/React.createElement("button", {
+    onClick: salvar,
+    className: "shrink-0 px-4 py-2 rounded-xl text-sm font-semibold border border-current/30 bg-white/40 dark:bg-slate-900/40 hover:bg-white/60 transition-colors"
+  }, "+ Monitorar")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-xs font-bold uppercase tracking-widest text-slate-400 mb-3"
+  }, "Perfil da Empresa"), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-3 gap-3"
+  }, [['CNPJ', fmtCnpj(cnpjInput.replace(/\D/g, ''))], ['Situação', result.rf.estabelecimento?.situacao_cadastral || '—'], ['Porte', result.rf.porte?.descricao || '—'], ['Capital Social', result.rf.capital_social ? 'R$ ' + parseFloat(result.rf.capital_social).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2
+  }) : '—'], ['Natureza Jurídica', result.rf.natureza_juridica?.descricao || '—'], ['Ativa desde', fmtDate(result.rf.estabelecimento?.data_inicio_atividade)]].map(([l, v]) => /*#__PURE__*/React.createElement("div", {
+    key: l
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 mb-0.5"
+  }, l), /*#__PURE__*/React.createElement("p", {
+    className: "font-medium text-slate-800 dark:text-slate-200 text-xs leading-snug"
+  }, v))), /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2 sm:col-span-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 mb-0.5"
+  }, "CNAE Principal"), /*#__PURE__*/React.createElement("p", {
+    className: "font-medium text-slate-800 dark:text-slate-200 text-xs"
+  }, result.rf.estabelecimento?.cnae_fiscal_principal?.descricao || '—')), /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2 sm:col-span-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 mb-0.5"
+  }, "Município / UF"), /*#__PURE__*/React.createElement("p", {
+    className: "font-medium text-slate-800 dark:text-slate-200 text-xs"
+  }, [result.rf.estabelecimento?.municipio?.nome, result.rf.estabelecimento?.uf].filter(Boolean).join(' / ') || '—')))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-xs font-bold uppercase tracking-widest text-slate-400 mb-3"
+  }, "Sanções"), !result.ceisOk && !result.cnepOk && /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 italic"
+  }, "Chave do Portal da Transparência não configurada — sanções não consultadas"), (result.ceisOk || result.cnepOk) && result.ceis.length === 0 && result.cnep.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 text-green-600 dark:text-green-400 text-sm"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "check",
+    className: "h-4 w-4"
+  }), /*#__PURE__*/React.createElement("span", null, "Nenhuma sanção registrada")), result.ceis.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "mb-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-red-700 dark:text-red-400 mr-2"
+  }, "CEIS"), /*#__PURE__*/React.createElement("span", {
+    className: "text-red-600 dark:text-red-300"
+  }, s.tipoSancao?.descricaoResumida || 'Suspenso/Inidôneo'), s.dataFimSancao && /*#__PURE__*/React.createElement("span", {
+    className: "text-red-500 ml-2"
+  }, "até ", fmtDate(s.dataFimSancao)), s.orgaoSancionador?.nome && /*#__PURE__*/React.createElement("span", {
+    className: "block text-red-400 mt-0.5"
+  }, "— ", s.orgaoSancionador.nome))), result.cnep.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "mb-2 p-2.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-bold text-orange-700 dark:text-orange-400 mr-2"
+  }, "CNEP"), /*#__PURE__*/React.createElement("span", {
+    className: "text-orange-600 dark:text-orange-300"
+  }, s.tipoSancao?.descricaoResumida || 'Multa Lei Anticorrupção'), s.valorMultaAplicada && /*#__PURE__*/React.createElement("span", {
+    className: "text-orange-500 ml-2"
+  }, "Multa: R$ ", parseFloat(s.valorMultaAplicada).toLocaleString('pt-BR')), s.dataFimSancao && /*#__PURE__*/React.createElement("span", {
+    className: "text-orange-400 ml-2"
+  }, "até ", fmtDate(s.dataFimSancao))))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-3"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-xs font-bold uppercase tracking-widest text-slate-400"
+  }, "Contratos Públicos (PNCP)"), result.contratos.length > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "text-sm font-bold text-indigo-600 dark:text-indigo-400"
+  }, fmtMoney(result.totalContratos), " total")), result.contratos.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400"
+  }, "Nenhum contrato encontrado no PNCP para este CNPJ") : /*#__PURE__*/React.createElement("div", {
+    className: "divide-y divide-slate-100 dark:divide-slate-800"
+  }, result.contratos.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "py-2 flex items-start justify-between gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs font-semibold text-slate-700 dark:text-slate-300 truncate"
+  }, c.orgaoEntidade?.razaoSocial || c.nomeOrgao || '—'), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 truncate mt-0.5"
+  }, c.objetoContrato || c.objeto || '—')), /*#__PURE__*/React.createElement("div", {
+    className: "shrink-0 text-right"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs font-bold text-indigo-600 dark:text-indigo-400"
+  }, fmtMoney(c.valorInicial || c.valorGlobal || 0)), /*#__PURE__*/React.createElement("p", {
+    className: "text-[10px] text-slate-400"
+  }, fmtDate(c.dataVigenciaInicio || c.dataAssinatura))))))), result.rf.socios?.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-xs font-bold uppercase tracking-widest text-slate-400 mb-3"
+  }, "Quadro Societário"), /*#__PURE__*/React.createElement("div", {
+    className: "divide-y divide-slate-100 dark:divide-slate-800"
+  }, result.rf.socios.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "py-1.5 flex items-center justify-between text-xs"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium text-slate-700 dark:text-slate-300"
+  }, s.nome), /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-400"
+  }, s.qualificacao_socio?.descricao || '—'))))))), /*#__PURE__*/React.createElement("div", {
+    className: "w-60 shrink-0 hidden lg:block"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm p-4 sticky top-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-3"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "bell",
+    className: "h-4 w-4 text-indigo-500"
+  }), "Monitorados"), saved.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: monitorar,
+    disabled: monitoring,
+    className: "text-xs text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-40 font-medium"
+  }, monitoring ? 'Verificando...' : '↻ Atualizar')), saved.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 text-center py-8 leading-relaxed"
+  }, "Analise uma empresa e clique em \"+ Monitorar\"") : /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, saved.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.cnpj,
+    className: `rounded-xl p-3 border text-xs cursor-pointer transition-colors ${alerts[c.cnpj] ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`,
+    onClick: () => {
+      setCnpjInput(fmtCnpj(c.cnpj));
+      setResult(null);
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-start gap-1"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "font-semibold text-slate-700 dark:text-slate-200 leading-snug truncate"
+  }, c.razaoSocial), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-400 font-mono text-[10px] mt-0.5"
+  }, fmtCnpj(c.cnpj)), /*#__PURE__*/React.createElement("span", {
+    className: `inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${vCls[c.veredicto]}`
+  }, vLabel[c.veredicto]), alerts[c.cnpj] && alerts[c.cnpj].map((a, i) => /*#__PURE__*/React.createElement("p", {
+    key: i,
+    className: "text-amber-700 dark:text-amber-400 font-medium mt-1 leading-snug"
+  }, "⚠ ", a)), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-300 dark:text-slate-600 text-[10px] mt-1"
+  }, fmtDate(c.checkedAt))), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      remover(c.cnpj);
+    },
+    className: "text-slate-300 hover:text-red-500 transition-colors p-0.5 shrink-0"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "x",
+    className: "h-3.5 w-3.5"
+  }))))))))));
+};
 const Dashboard = ({
   onLogout,
   bgConfig,
@@ -1589,6 +1987,7 @@ const Dashboard = ({
     reader.readAsDataURL(file);
   };
   const [soundConfig, setSoundConfig] = useState(() => localStorage.getItem('licitahub-sound') || 'chime');
+  const [activeTab, setActiveTab] = useState('editais');
   useEffect(() => {
     localStorage.setItem('licitahub-sound', soundConfig);
   }, [soundConfig]);
@@ -2182,7 +2581,28 @@ const Dashboard = ({
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "logout",
     className: "h-5 w-5"
-  }))))), /*#__PURE__*/React.createElement("main", {
+  })))))), 
+/*#__PURE__*/React.createElement("div", {
+  className: "border-b border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm"
+}, /*#__PURE__*/React.createElement("div", {
+  className: "max-w-[98%] mx-auto px-4 flex"
+},
+/*#__PURE__*/React.createElement("button", {
+  onClick: () => setActiveTab('editais'),
+  className: `flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'editais' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`
+},
+/*#__PURE__*/React.createElement(Icon, {name:"search",className:"h-4 w-4"}),
+"Busca de Editais"
+),
+/*#__PURE__*/React.createElement("button", {
+  onClick: () => setActiveTab('concorrentes'),
+  className: `flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'concorrentes' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`
+},
+/*#__PURE__*/React.createElement(Icon, {name:"building",className:"h-4 w-4"}),
+"Análise de Concorrentes"
+)))
+,
+  activeTab === 'editais' ? /*#__PURE__*/React.createElement("main", {
     className: "max-w-[98%] mx-auto px-4 py-6 w-full flex-1 flex flex-col gap-6 relative z-10"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-4 sm:p-6 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-800/50 space-y-4"
@@ -2929,7 +3349,7 @@ const Dashboard = ({
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "refresh",
     className: "w-4 h-4 mr-2"
-  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))));
+  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)")))))))): /*#__PURE__*/React.createElement(AnaliseConcorrentes, null));
 };
 const App = () => {
   const [currentUser, setCurrentUser] = useState(() => {
