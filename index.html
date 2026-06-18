@@ -2754,7 +2754,7 @@ const AnaliseConcorrentes = () => {
   const [saved, setSaved] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('lh-watchlist') || '[]');
-    } catch (e) {
+    } catch {
       return [];
     }
   });
@@ -2786,27 +2786,41 @@ const AnaliseConcorrentes = () => {
     const cnep = Array.isArray(cnepR.value) ? cnepR.value : [];
     const pd = pncpR.value;
     const contratos = Array.isArray(pd) ? pd : pd?.data || [];
+    const mySocios = (rf.socios || []).map(s => s.nome.trim().toUpperCase());
+    const watchlist = JSON.parse(localStorage.getItem('lh-watchlist') || '[]');
+    const relationships = watchlist.filter(w => w.cnpj !== cnpj14).map(w => {
+      const shared = (w.socios || []).filter(ws => mySocios.includes(ws.nome.trim().toUpperCase()));
+      return shared.length > 0 ? {
+        cnpj: w.cnpj,
+        razaoSocial: w.razaoSocial,
+        socios: shared.map(s => s.nome)
+      } : null;
+    }).filter(Boolean);
     const now = new Date();
     const sancaoAtiva = ceis.some(s => !s.dataFimSancao || new Date(s.dataFimSancao) > now);
     const multaAtiva = cnep.some(s => !s.dataFimSancao || new Date(s.dataFimSancao) > now);
     const ativa = rf.estabelecimento?.situacao_cadastral === 'Ativa';
     let veredicto = 'APTA';
-    if (!ativa || sancaoAtiva) veredicto = 'INAPTA';else if (multaAtiva || ceis.length > 0 || cnep.length > 0) veredicto = 'ATENCAO';
+    if (!ativa || sancaoAtiva) veredicto = 'INAPTA';else if (multaAtiva || ceis.length > 0 || cnep.length > 0 || relationships.length > 0) veredicto = 'ATENCAO';
     return {
       rf,
       ceis,
       cnep,
       contratos,
       veredicto,
+      relationships,
       ceisOk: ceisR.value !== null,
       cnepOk: cnepR.value !== null,
       checkedAt: new Date().toISOString(),
       totalContratos: contratos.reduce((s, c) => s + (c.valorInicial || c.valorGlobal || 0), 0)
     };
   };
-  const buscar = async () => {
-    const c = cnpjInput.replace(/\D/g, '');
+  const buscar = async cnpjDireto => {
+    const c = (cnpjDireto || cnpjInput).replace(/\D/g, '');
     if (c.length !== 14) return;
+    if (!cnpjDireto) {} else {
+      setCnpjInput(fmtCnpj(c));
+    }
     setLoading(true);
     setResult(null);
     setError(null);
@@ -2827,7 +2841,11 @@ const AnaliseConcorrentes = () => {
       checkedAt: result.checkedAt,
       ceis: result.ceis.length,
       cnep: result.cnep.length,
-      contratos: result.contratos.length
+      contratos: result.contratos.length,
+      socios: (result.rf.socios || []).map(s => ({
+        nome: s.nome,
+        tipo: s.tipo || ''
+      }))
     };
     const upd = [entry, ...saved.filter(s => s.cnpj !== c)];
     setSaved(upd);
@@ -2849,22 +2867,26 @@ const AnaliseConcorrentes = () => {
     const newAlerts = {};
     const upd = [...saved];
     for (let i = 0; i < upd.length; i++) {
-      const c = upd[i];
       try {
-        const fresh = await fetchAll(c.cnpj);
+        const fresh = await fetchAll(upd[i].cnpj);
         const ch = [];
-        if (fresh.ceis.length > c.ceis) ch.push(`+${fresh.ceis.length - c.ceis} sanção CEIS`);
-        if (fresh.cnep.length > c.cnep) ch.push(`+${fresh.cnep.length - c.cnep} multa CNEP`);
-        if (fresh.contratos.length > c.contratos) ch.push(`+${fresh.contratos.length - c.contratos} contrato novo`);
-        if (fresh.veredicto !== c.veredicto) ch.push(`Status: ${c.veredicto} → ${fresh.veredicto}`);
-        if (ch.length) newAlerts[c.cnpj] = ch;
+        if (fresh.ceis.length > upd[i].ceis) ch.push(`+${fresh.ceis.length - upd[i].ceis} sanção CEIS`);
+        if (fresh.cnep.length > upd[i].cnep) ch.push(`+${fresh.cnep.length - upd[i].cnep} multa CNEP`);
+        if (fresh.contratos.length > upd[i].contratos) ch.push(`+${fresh.contratos.length - upd[i].contratos} contrato novo`);
+        if (fresh.veredicto !== upd[i].veredicto) ch.push(`Status: ${upd[i].veredicto} → ${fresh.veredicto}`);
+        if (fresh.relationships.length > 0) ch.push(`${fresh.relationships.length} vínculo(s) societário(s)`);
+        if (ch.length) newAlerts[upd[i].cnpj] = ch;
         upd[i] = {
-          ...c,
+          ...upd[i],
           veredicto: fresh.veredicto,
           checkedAt: fresh.checkedAt,
           ceis: fresh.ceis.length,
           cnep: fresh.cnep.length,
-          contratos: fresh.contratos.length
+          contratos: fresh.contratos.length,
+          socios: fresh.rf.socios?.map(s => ({
+            nome: s.nome,
+            tipo: s.tipo || ''
+          }))
         };
       } catch (e) {}
     }
@@ -2896,13 +2918,13 @@ const AnaliseConcorrentes = () => {
     INAPTA: 'INAPTA'
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "flex-1 flex gap-0 overflow-auto"
+    className: "flex-1 flex overflow-auto"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex-1 min-w-0 max-w-[98%] mx-auto px-4 py-6 flex gap-5"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex-1 min-w-0 space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm p-5"
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"
   }, /*#__PURE__*/React.createElement("h2", {
     className: "text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"
   }, /*#__PURE__*/React.createElement(Icon, {
@@ -2918,7 +2940,7 @@ const AnaliseConcorrentes = () => {
     placeholder: "00.000.000/0000-00",
     className: "flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
   }), /*#__PURE__*/React.createElement("button", {
-    onClick: buscar,
+    onClick: () => buscar(),
     disabled: loading || cnpjInput.replace(/\D/g, '').length !== 14,
     className: "px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
   }, loading ? 'Buscando...' : 'Analisar')), !transpKey && /*#__PURE__*/React.createElement("div", {
@@ -2938,7 +2960,7 @@ const AnaliseConcorrentes = () => {
       setTranspKey(keyDraft);
       setShowKey(false);
       toast({
-        title: 'Chave salva com sucesso',
+        title: 'Chave salva',
         variant: 'success'
       });
     },
@@ -2977,7 +2999,37 @@ const AnaliseConcorrentes = () => {
   }, result.rf.razao_social))), /*#__PURE__*/React.createElement("button", {
     onClick: salvar,
     className: "shrink-0 px-4 py-2 rounded-xl text-sm font-semibold border border-current/30 bg-white/40 dark:bg-slate-900/40 hover:bg-white/60 transition-colors"
-  }, "+ Monitorar")), /*#__PURE__*/React.createElement("div", {
+  }, "+ Monitorar")), result.relationships.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "bg-orange-50 dark:bg-orange-900/20 rounded-2xl border border-orange-300 dark:border-orange-700 p-4"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-xs font-bold uppercase tracking-widest text-orange-700 dark:text-orange-400 mb-3 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "alert",
+    className: "h-4 w-4"
+  }), "Vínculos Societários Detectados (", result.relationships.length, ")"), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, result.relationships.map((rel, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "p-3 rounded-xl bg-orange-100/80 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 text-xs"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-start justify-between gap-2"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    className: "font-bold text-orange-800 dark:text-orange-300"
+  }, rel.razaoSocial), /*#__PURE__*/React.createElement("p", {
+    className: "text-orange-600 dark:text-orange-400 font-mono text-[10px] mt-0.5"
+  }, fmtCnpj(rel.cnpj))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => buscar(rel.cnpj),
+    className: "shrink-0 text-[10px] px-2 py-1 bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 rounded-lg font-medium hover:bg-orange-300 transition-colors"
+  }, "Analisar")), /*#__PURE__*/React.createElement("p", {
+    className: "text-orange-700 dark:text-orange-300 mt-2 font-medium"
+  }, "Sócios em comum:"), /*#__PURE__*/React.createElement("ul", {
+    className: "mt-1 space-y-0.5"
+  }, rel.socios.map((nome, j) => /*#__PURE__*/React.createElement("li", {
+    key: j,
+    className: "text-orange-600 dark:text-orange-400"
+  }, "• ", nome)))))), /*#__PURE__*/React.createElement("p", {
+    className: "text-[10px] text-orange-500 dark:text-orange-500 mt-2 italic"
+  }, "⚠ Empresas com sócios em comum podem configurar conluio em licitações")), /*#__PURE__*/React.createElement("div", {
     className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4"
   }, /*#__PURE__*/React.createElement("h3", {
     className: "text-xs font-bold uppercase tracking-widest text-slate-400 mb-3"
@@ -2997,7 +3049,18 @@ const AnaliseConcorrentes = () => {
     className: "text-xs text-slate-400 mb-0.5"
   }, "CNAE Principal"), /*#__PURE__*/React.createElement("p", {
     className: "font-medium text-slate-800 dark:text-slate-200 text-xs"
-  }, result.rf.estabelecimento?.cnae_fiscal_principal?.descricao || '—')), /*#__PURE__*/React.createElement("div", {
+  }, result.rf.estabelecimento?.cnae_fiscal_principal?.descricao || '—')), result.rf.estabelecimento?.atividades_secundarias?.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2 sm:col-span-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400 mb-1"
+  }, "CNAEs Secundários"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap gap-1"
+  }, result.rf.estabelecimento.atividades_secundarias.slice(0, 8).map((a, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    className: "text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700"
+  }, a.descricao || a.codigo)), result.rf.estabelecimento.atividades_secundarias.length > 8 && /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-slate-400"
+  }, "+", result.rf.estabelecimento.atividades_secundarias.length - 8, " mais"))), /*#__PURE__*/React.createElement("div", {
     className: "col-span-2 sm:col-span-3"
   }, /*#__PURE__*/React.createElement("p", {
     className: "text-xs text-slate-400 mb-0.5"
@@ -3046,7 +3109,7 @@ const AnaliseConcorrentes = () => {
     className: "text-sm font-bold text-indigo-600 dark:text-indigo-400"
   }, fmtMoney(result.totalContratos), " total")), result.contratos.length === 0 ? /*#__PURE__*/React.createElement("p", {
     className: "text-xs text-slate-400"
-  }, "Nenhum contrato encontrado no PNCP para este CNPJ") : /*#__PURE__*/React.createElement("div", {
+  }, "Nenhum contrato encontrado no PNCP") : /*#__PURE__*/React.createElement("div", {
     className: "divide-y divide-slate-100 dark:divide-slate-800"
   }, result.contratos.map((c, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
@@ -3071,15 +3134,23 @@ const AnaliseConcorrentes = () => {
     className: "divide-y divide-slate-100 dark:divide-slate-800"
   }, result.rf.socios.map((s, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
-    className: "py-1.5 flex items-center justify-between text-xs"
-  }, /*#__PURE__*/React.createElement("span", {
+    className: "py-2 flex items-center justify-between gap-2 text-xs"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, /*#__PURE__*/React.createElement("p", {
     className: "font-medium text-slate-700 dark:text-slate-300"
-  }, s.nome), /*#__PURE__*/React.createElement("span", {
-    className: "text-slate-400"
-  }, s.qualificacao_socio?.descricao || '—'))))))), /*#__PURE__*/React.createElement("div", {
+  }, s.nome), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-400 text-[10px]"
+  }, s.tipo || 'Pessoa Física', " · desde ", fmtDate(s.data_entrada))), /*#__PURE__*/React.createElement("div", {
+    className: "shrink-0 text-right"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-500 dark:text-slate-400"
+  }, s.qualificacao_socio?.descricao || '—'))))), /*#__PURE__*/React.createElement("p", {
+    className: "text-[10px] text-slate-400 mt-2 italic"
+  }, "CPFs/CNPJs mascarados pela Receita Federal — rastreamento por nome")))), /*#__PURE__*/React.createElement("div", {
     className: "w-60 shrink-0 hidden lg:block"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm p-4 sticky top-6"
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4 sticky top-6"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-3"
   }, /*#__PURE__*/React.createElement("h3", {
@@ -3098,10 +3169,7 @@ const AnaliseConcorrentes = () => {
   }, saved.map(c => /*#__PURE__*/React.createElement("div", {
     key: c.cnpj,
     className: `rounded-xl p-3 border text-xs cursor-pointer transition-colors ${alerts[c.cnpj] ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`,
-    onClick: () => {
-      setCnpjInput(fmtCnpj(c.cnpj));
-      setResult(null);
-    }
+    onClick: () => buscar(c.cnpj)
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-start gap-1"
   }, /*#__PURE__*/React.createElement("div", {
@@ -3111,15 +3179,17 @@ const AnaliseConcorrentes = () => {
   }, c.razaoSocial), /*#__PURE__*/React.createElement("p", {
     className: "text-slate-400 font-mono text-[10px] mt-0.5"
   }, fmtCnpj(c.cnpj)), /*#__PURE__*/React.createElement("span", {
-    className: `inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${vCls[c.veredicto]}`
-  }, vLabel[c.veredicto]), alerts[c.cnpj] && alerts[c.cnpj].map((a, i) => /*#__PURE__*/React.createElement("p", {
+    className: `inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${vCls[c.veredicto] || vCls.APTA}`
+  }, vLabel[c.veredicto] || c.veredicto), c.socios?.length > 0 && /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-400 text-[10px] mt-1"
+  }, c.socios.length, " sócio(s) rastreado(s)"), alerts[c.cnpj] && alerts[c.cnpj].map((a, i) => /*#__PURE__*/React.createElement("p", {
     key: i,
     className: "text-amber-700 dark:text-amber-400 font-medium mt-1 leading-snug"
   }, "⚠ ", a)), /*#__PURE__*/React.createElement("p", {
     className: "text-slate-300 dark:text-slate-600 text-[10px] mt-1"
   }, fmtDate(c.checkedAt))), /*#__PURE__*/React.createElement("button", {
-    onClick: e => {
-      e.stopPropagation();
+    onClick: ev => {
+      ev.stopPropagation();
       remover(c.cnpj);
     },
     className: "text-slate-300 hover:text-red-500 transition-colors p-0.5 shrink-0"
@@ -3128,6 +3198,7 @@ const AnaliseConcorrentes = () => {
     className: "h-3.5 w-3.5"
   }))))))))));
 };
+
 const Dashboard = ({
 
   onLogout,
