@@ -517,19 +517,23 @@ const getEsferaInfo = (nomeOrgao, esfera_nome) => {
   if (org.includes('FEDERAL') || org.includes('MINISTÉRIO') || org.includes('UNIÃO') || org.includes('INSTITUTO FEDERAL')) return 'Federal';
   return 'Não informada';
 };
-const _normCapag = s => s ? s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'') : '';
+const _normCapag = s => s ? s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'') : '';
 const getCapagNote = (nomeOrgao, ufSigla) => {
   if (!nomeOrgao || !window.CAPAG_DATA) return null;
-  const upper = nomeOrgao.toUpperCase();
-  if (!upper.includes('PREFEITURA') && !upper.includes('CAMARA') && !upper.includes('C\xC2MARA') && !upper.includes('FUNDO MUNICIPAL')) return null;
-  const m = upper.match(/(?:PREFEITURA|C[A\xC2]MARA|FUNDO\s+MUNICIPAL)\s+(?:MUNICIPAL\s+)?(?:DE|DO|DA|DOS|DAS)\s+(.+)/);
-  if (!m) return null;
-  const cityKey = _normCapag(m[1].trim());
-  const lookup = window.CAPAG_DATA[cityKey];
-  if (!lookup) return null;
-  const entries = Object.entries(lookup);
-  if (entries.length === 1) return entries[0][1];
-  if (ufSigla && lookup[ufSigla]) return lookup[ufSigla];
+  const norm = _normCapag(nomeOrgao);
+  if (!norm.includes('PREFEITURA') && !norm.includes('CAMARA') &&
+      !norm.includes('MUNICIPIO') && !norm.includes('MUNICIPAL')) return null;
+  const words = norm.split(/\s+/);
+  for (let len = words.length; len >= 1; len--) {
+    const candidate = words.slice(words.length - len).join(' ');
+    if (candidate.length < 3) continue;
+    const lookup = window.CAPAG_DATA[candidate];
+    if (lookup) {
+      const entries = Object.entries(lookup);
+      if (entries.length === 1) return entries[0][1];
+      if (ufSigla && lookup[ufSigla]) return lookup[ufSigla];
+    }
+  }
   return null;
 };
 const getCapagColor = note => {
