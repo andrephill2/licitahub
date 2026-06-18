@@ -1987,7 +1987,7 @@ const Dashboard = ({
     reader.readAsDataURL(file);
   };
   const [soundConfig, setSoundConfig] = useState(() => localStorage.getItem('licitahub-sound') || 'chime');
-  const [activeTab, setActiveTab] = useState('editais');
+  const [moduleTab, setModuleTab] = useState('editais');
   useEffect(() => {
     localStorage.setItem('licitahub-sound', soundConfig);
   }, [soundConfig]);
@@ -2588,21 +2588,21 @@ const Dashboard = ({
   className: "max-w-[98%] mx-auto px-4 flex"
 },
 /*#__PURE__*/React.createElement("button", {
-  onClick: () => setActiveTab('editais'),
-  className: `flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'editais' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`
+  onClick: () => setModuleTab('editais'),
+  className: `flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${moduleTab === 'editais' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`
 },
 /*#__PURE__*/React.createElement(Icon, {name:"search",className:"h-4 w-4"}),
 "Busca de Editais"
 ),
 /*#__PURE__*/React.createElement("button", {
-  onClick: () => setActiveTab('concorrentes'),
-  className: `flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'concorrentes' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`
+  onClick: () => setModuleTab('concorrentes'),
+  className: `flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${moduleTab === 'concorrentes' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`
 },
 /*#__PURE__*/React.createElement(Icon, {name:"building",className:"h-4 w-4"}),
 "Análise de Concorrentes"
 )))
 ,
-  activeTab === 'editais' ? /*#__PURE__*/React.createElement("main", {
+  moduleTab === 'editais' ? /*#__PURE__*/React.createElement("main", {
     className: "max-w-[98%] mx-auto px-4 py-6 w-full flex-1 flex flex-col gap-6 relative z-10"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-4 sm:p-6 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-800/50 space-y-4"
@@ -3349,7 +3349,7 @@ const Dashboard = ({
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "refresh",
     className: "w-4 h-4 mr-2"
-  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))) : /*#__PURE__*/React.createElement(AnaliseConcorrentes, null);
+  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))) : /*#__PURE__*/React.createElement(AnaliseConcorrentes, null));
 };
 const App = () => {
   const [currentUser, setCurrentUser] = useState(() => {
