@@ -2731,6 +2731,414 @@ const Login = ({
 };
 
 
+const BuscaDireta = () => {
+  const [mode, setMode] = useState('numero');
+  const [uasg, setUasg] = useState('');
+  const [numPregao, setNumPregao] = useState('');
+  const [anoPregao, setAnoPregao] = useState(() => new Date().getFullYear().toString());
+  const [modComp, setModComp] = useState('5');
+  const [numResult, setNumResult] = useState(null);
+  const [kw, setKw] = useState('');
+  const [ufFil, setUfFil] = useState('');
+  const [dtIni, setDtIni] = useState('');
+  const [dtFim, setDtFim] = useState('');
+  const [modPNCP, setModPNCP] = useState('');
+  const [objRows, setObjRows] = useState([]);
+  const [objTotal, setObjTotal] = useState(0);
+  const [objPage, setObjPage] = useState(1);
+  const [cnpjOrg, setCnpjOrg] = useState('');
+  const [anoOrg, setAnoOrg] = useState(() => new Date().getFullYear().toString());
+  const [orgRows, setOrgRows] = useState([]);
+  const [orgTotal, setOrgTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const {
+    toast
+  } = useToast();
+  const UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+  const MODS_COMP = [{
+    v: '5',
+    l: 'Pregão (5)'
+  }, {
+    v: '6',
+    l: 'Pregão Eletrônico (6)'
+  }, {
+    v: '3',
+    l: 'Concorrência (3)'
+  }, {
+    v: '2',
+    l: 'Tomada de Preços (2)'
+  }, {
+    v: '1',
+    l: 'Convite (1)'
+  }, {
+    v: '8',
+    l: 'Dispensa (8)'
+  }];
+  const MODS_PNCP = [{
+    v: '',
+    l: 'Todas as modalidades'
+  }, {
+    v: '6',
+    l: 'Pregão Eletrônico'
+  }, {
+    v: '4',
+    l: 'Concorrência'
+  }, {
+    v: '8',
+    l: 'Dispensa'
+  }, {
+    v: '3',
+    l: 'Concurso'
+  }, {
+    v: '1',
+    l: 'Leilão'
+  }];
+  const fmtM = v => !v ? '—' : new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    notation: 'compact',
+    maximumFractionDigits: 1
+  }).format(v);
+  const fmtD = s => s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-BR') : '—';
+  const fmtCnpj = v => {
+    const d = v.replace(/\D/g, '').slice(0, 14);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return d.slice(0, 2) + '.' + d.slice(2);
+    if (d.length <= 8) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5);
+    if (d.length <= 12) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8);
+    return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12) + '-' + d.slice(12);
+  };
+  const buscarNumero = async () => {
+    const u = uasg.trim();
+    const n = numPregao.replace(/\D/g, '');
+    if (!u || !n) {
+      toast({
+        title: 'Informe a UASG e o número do pregão',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setNumResult(null);
+    const numprp = n.padStart(5, '0') + anoPregao;
+    const url = `https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=${u}&modprp=${modComp}&numprp=${numprp}`;
+    const urlConsulta = `https://comprasnet.gov.br/ConsultaLicitacoes/ConsultaLicitacoesSIASG.asp?numero_licitacao=${n}&ano=${anoPregao}&orgao_codigo=${u}`;
+    let dados = null;
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch(`https://compras.dados.gov.br/licitacoes/v1/licitacoes.json?uasg=${u}&numero=${numprp}&modalidade=${modComp}`, {
+        signal: ctrl.signal
+      });
+      clearTimeout(tid);
+      if (r.ok) {
+        const d = await r.json();
+        dados = Array.isArray(d) ? d[0] : d?.licitacoes?.[0] || null;
+      }
+    } catch (e) {}
+    setNumResult({
+      url,
+      urlConsulta,
+      dados,
+      numprp,
+      uasg: u,
+      num: n,
+      ano: anoPregao,
+      mod: modComp
+    });
+    setLoading(false);
+  };
+  const buscarObjeto = async (page = 1) => {
+    if (!kw.trim()) {
+      toast({
+        title: 'Informe palavras-chave',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setLoading(true);
+    if (page === 1) {
+      setError(null);
+      setObjRows([]);
+    }
+    try {
+      const p = new URLSearchParams({
+        pagina: page,
+        tamanhoPagina: 10,
+        palavrasChave: kw.trim()
+      });
+      if (modPNCP) p.set('codigoModalidadeContratacao', modPNCP);
+      if (ufFil) p.set('ufSigla', ufFil);
+      if (dtIni) p.set('dataInicial', dtIni);
+      if (dtFim) p.set('dataFinal', dtFim);
+      const r = await fetch(`https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?${p}`);
+      if (!r.ok) throw new Error(`PNCP retornou ${r.status} — tente outros termos ou remova filtros`);
+      const d = await r.json();
+      const rows = Array.isArray(d) ? d : d.data || [];
+      setObjRows(page === 1 ? rows : [...objRows, ...rows]);
+      setObjTotal(d.totalRegistros || d.total || rows.length);
+      setObjPage(page);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  };
+  const buscarOrgao = async () => {
+    const cnpj = cnpjOrg.replace(/\D/g, '');
+    if (cnpj.length !== 14) {
+      toast({
+        title: 'CNPJ deve ter 14 dígitos',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setOrgRows([]);
+    try {
+      const r = await fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras?anoCompra=${anoOrg}&pagina=1&tamanhoPagina=20`);
+      if (!r.ok) throw new Error(`PNCP retornou ${r.status}`);
+      const d = await r.json();
+      const rows = Array.isArray(d) ? d : d.data || [];
+      setOrgRows(rows);
+      setOrgTotal(d.totalRegistros || d.total || rows.length);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  };
+  const renderCard = (item, i) => {
+    const cnpj = item.orgaoEntidade?.cnpj || '';
+    const pncpUrl = item.linkEdital || `https://pncp.gov.br/app/editais/${cnpj}/${item.anoCompra || ''}/${item.sequencialCompra || ''}`;
+    const deadline = item.dataEncerramentoOferta || item.dataEncerramento;
+    const isExpired = deadline && new Date(deadline) < new Date();
+    return /*#__PURE__*/React.createElement("div", {
+      key: item.numeroControlePNCP || i,
+      className: "p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white/60 dark:bg-slate-900/60 transition-all text-xs"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-start justify-between gap-3 mb-2"
+    }, /*#__PURE__*/React.createElement("p", {
+      className: "font-bold text-slate-700 dark:text-slate-200 text-sm leading-snug flex-1 min-w-0"
+    }, item.objetoCompra || item.objeto || '—'), /*#__PURE__*/React.createElement("span", {
+      className: "shrink-0 text-base font-bold text-indigo-600 dark:text-indigo-400"
+    }, fmtM(item.valorTotalEstimado || item.valorEstimado))), /*#__PURE__*/React.createElement("p", {
+      className: "text-slate-500 mb-2 truncate"
+    }, item.orgaoEntidade?.razaoSocial || item.nomeOrgao || '—'), /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-wrap items-center gap-3 text-slate-400 mb-3"
+    }, (item.ufSigla || item.municipioNome) && /*#__PURE__*/React.createElement("span", null, "📍 ", [item.municipioNome, item.ufSigla].filter(Boolean).join(' · ')), deadline && /*#__PURE__*/React.createElement("span", {
+      className: isExpired ? 'text-red-400' : 'text-green-600 dark:text-green-400'
+    }, "⏱ ", isExpired ? 'Encerrado' : 'Encerra', " ", fmtD(deadline)), item.processo && /*#__PURE__*/React.createElement("span", {
+      className: "font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded"
+    }, item.processo), (item.modalidadeNome || item.codigoModalidadeContratacao) && /*#__PURE__*/React.createElement("span", {
+      className: "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded"
+    }, item.modalidadeNome || 'Modalidade ' + item.codigoModalidadeContratacao)), /*#__PURE__*/React.createElement("div", {
+      className: "flex gap-2"
+    }, /*#__PURE__*/React.createElement("a", {
+      href: pncpUrl,
+      target: "_blank",
+      rel: "noreferrer",
+      className: "px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
+    }, "Ver no PNCP →"), item.linkEdital && /*#__PURE__*/React.createElement("a", {
+      href: item.linkEdital,
+      target: "_blank",
+      rel: "noreferrer",
+      className: "px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg font-semibold transition-colors"
+    }, "Edital PDF")));
+  };
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const labelCls = "text-xs text-slate-500 block mb-1";
+  const btnPrimary = "px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors";
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 overflow-auto"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "max-w-4xl mx-auto px-4 py-6 space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4"
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "search",
+    className: "h-4 w-4 text-indigo-500"
+  }), "Busca Direta de Editais"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 flex-wrap"
+  }, [['numero', '🔢 Por Número (UASG)'], ['objeto', '🔍 Por Palavras-chave'], ['orgao', '🏛 Por Órgão (CNPJ)']].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => {
+      setMode(v);
+      setError(null);
+    },
+    className: `px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${mode === v ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`
+  }, l)))), mode === 'numero' && /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4 space-y-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400"
+  }, "Acesso direto ao edital no ComprasNet usando o código da unidade compradora (UASG) e o número do pregão. Exemplo da URL fornecida: UASG 926150 · Pregão 90057 · Ano 2026 · Modalidade 5."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "UASG *"), /*#__PURE__*/React.createElement("input", {
+    value: uasg,
+    onChange: e => setUasg(e.target.value.replace(/\D/g, '')),
+    onKeyDown: e => e.key === 'Enter' && buscarNumero(),
+    placeholder: "926150",
+    className: inputCls + " font-mono"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Nº Pregão *"), /*#__PURE__*/React.createElement("input", {
+    value: numPregao,
+    onChange: e => setNumPregao(e.target.value.replace(/\D/g, '')),
+    onKeyDown: e => e.key === 'Enter' && buscarNumero(),
+    placeholder: "90057",
+    className: inputCls + " font-mono"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Ano"), /*#__PURE__*/React.createElement("input", {
+    value: anoPregao,
+    onChange: e => setAnoPregao(e.target.value.replace(/\D/g, '').slice(0, 4)),
+    placeholder: "2026",
+    className: inputCls + " font-mono"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Modalidade"), /*#__PURE__*/React.createElement("select", {
+    value: modComp,
+    onChange: e => setModComp(e.target.value),
+    className: inputCls
+  }, MODS_COMP.map(m => /*#__PURE__*/React.createElement("option", {
+    key: m.v,
+    value: m.v
+  }, m.l))))), /*#__PURE__*/React.createElement("button", {
+    onClick: buscarNumero,
+    disabled: loading,
+    className: btnPrimary
+  }, loading ? 'Buscando...' : 'Localizar Edital'), numResult && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "p-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-2"
+  }, "Link direto — Edital no ComprasNet"), /*#__PURE__*/React.createElement("a", {
+    href: numResult.url,
+    target: "_blank",
+    rel: "noreferrer",
+    className: "inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+  }, "Abrir Pregão ", numResult.num, "/", numResult.ano, " UASG ", numResult.uasg, " →"), /*#__PURE__*/React.createElement("div", {
+    className: "mt-3 text-[10px] text-indigo-500 space-y-0.5"
+  }, /*#__PURE__*/React.createElement("p", null, "coduasg=", numResult.uasg, " · modprp=", numResult.mod, " · numprp=", numResult.numprp), /*#__PURE__*/React.createElement("p", {
+    className: "text-indigo-400"
+  }, "Se a página retornar \"não encontrado\", verifique se a modalidade está correta (5=Pregão tradicional, 6=Pregão Eletrônico)."))), numResult.dados && Object.keys(numResult.dados).length > 1 && /*#__PURE__*/React.createElement("div", {
+    className: "p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "font-bold text-slate-700 dark:text-slate-200"
+  }, numResult.dados.objeto_compra || numResult.dados.descricao || '—'), /*#__PURE__*/React.createElement("p", {
+    className: "text-slate-400"
+  }, numResult.dados.nome_unidade || numResult.dados.uasg_nome || '—'), numResult.dados.valor_estimado && /*#__PURE__*/React.createElement("p", {
+    className: "text-indigo-600 dark:text-indigo-400 font-bold"
+  }, fmtM(numResult.dados.valor_estimado))))), mode === 'objeto' && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4 space-y-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400"
+  }, "Busca no PNCP (Portal Nacional de Contratações Públicas) por palavras do objeto."), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Palavras-chave do objeto *"), /*#__PURE__*/React.createElement("input", {
+    value: kw,
+    onChange: e => setKw(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && buscarObjeto(1),
+    placeholder: "ex: digitalização documentos, gestão documental, microfilme",
+    className: inputCls
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Modalidade"), /*#__PURE__*/React.createElement("select", {
+    value: modPNCP,
+    onChange: e => setModPNCP(e.target.value),
+    className: inputCls
+  }, MODS_PNCP.map(m => /*#__PURE__*/React.createElement("option", {
+    key: m.v,
+    value: m.v
+  }, m.l)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "UF"), /*#__PURE__*/React.createElement("select", {
+    value: ufFil,
+    onChange: e => setUfFil(e.target.value),
+    className: inputCls
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Todos os estados"), UFS.map(u => /*#__PURE__*/React.createElement("option", {
+    key: u,
+    value: u
+  }, u)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Publicado após"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: dtIni,
+    onChange: e => setDtIni(e.target.value),
+    className: inputCls
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Publicado antes"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: dtFim,
+    onChange: e => setDtFim(e.target.value),
+    className: inputCls
+  }))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => buscarObjeto(1),
+    disabled: loading,
+    className: btnPrimary
+  }, loading && objRows.length === 0 ? 'Buscando...' : 'Buscar no PNCP')), error && /*#__PURE__*/React.createElement("div", {
+    className: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 text-red-700 dark:text-red-400 text-sm"
+  }, error), objRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-500 px-1"
+  }, objTotal.toLocaleString('pt-BR'), " resultado(s) · exibindo ", objRows.length), objRows.map((item, i) => renderCard(item, i)), objRows.length < objTotal && /*#__PURE__*/React.createElement("button", {
+    onClick: () => buscarObjeto(objPage + 1),
+    disabled: loading,
+    className: "w-full py-2.5 text-sm text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-300 dark:border-indigo-700 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 transition-colors"
+  }, loading ? 'Carregando...' : 'Ver mais (' + (objTotal - objRows.length) + ' restantes)')), objRows.length === 0 && !loading && !error && kw && /*#__PURE__*/React.createElement("p", {
+    className: "text-center py-8 text-slate-400 text-sm"
+  }, "Nenhum resultado. Tente outros termos ou remova filtros.")), mode === 'orgao' && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4 space-y-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-400"
+  }, "Lista todas as contratações publicadas por um órgão no PNCP usando o CNPJ. Útil para acompanhar oportunidades de um cliente específico."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-3 gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "CNPJ do Órgão *"), /*#__PURE__*/React.createElement("input", {
+    value: cnpjOrg,
+    onChange: e => setCnpjOrg(fmtCnpj(e.target.value)),
+    onKeyDown: e => e.key === 'Enter' && buscarOrgao(),
+    placeholder: "00.000.000/0000-00",
+    className: inputCls + " font-mono"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: labelCls
+  }, "Ano"), /*#__PURE__*/React.createElement("input", {
+    value: anoOrg,
+    onChange: e => setAnoOrg(e.target.value.replace(/\D/g, '').slice(0, 4)),
+    placeholder: "2026",
+    className: inputCls + " font-mono"
+  }))), /*#__PURE__*/React.createElement("button", {
+    onClick: buscarOrgao,
+    disabled: loading,
+    className: btnPrimary
+  }, loading ? 'Buscando...' : 'Listar Contratações')), error && /*#__PURE__*/React.createElement("div", {
+    className: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 text-red-700 dark:text-red-400 text-sm"
+  }, error), orgRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-500 px-1"
+  }, orgTotal.toLocaleString('pt-BR'), " contratação(ões) em ", anoOrg), orgRows.map((item, i) => renderCard(item, i))))));
+};
+
 const AnaliseConcorrentes = () => {
   const fmtCnpj = v => {
     const d = v.replace(/\D/g, '').slice(0, 14);
@@ -4840,6 +5248,8 @@ const Dashboard = ({
   /*#__PURE__*/React.createElement("div",{className:"max-w-[98%] mx-auto px-4 flex"},
     /*#__PURE__*/React.createElement("button",{onClick:function(){setModuleTab('editais');},className:moduleTab==='editais'?'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400':'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700'},
     /*#__PURE__*/React.createElement(Icon,{name:"search",className:"h-4 w-4"}),"Busca de Editais"),
+    /*#__PURE__*/React.createElement("button",{onClick:function(){setModuleTab('busca');},className:moduleTab==='busca'?'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400':'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700'},
+    /*#__PURE__*/React.createElement(Icon,{name:"search",className:"h-4 w-4"}),"Busca Direta"),
     /*#__PURE__*/React.createElement("button",{onClick:function(){setModuleTab('concorrentes');},className:moduleTab==='concorrentes'?'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400':'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700'},
     /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4"}),"Análise de Concorrentes")
   )
@@ -6338,7 +6748,7 @@ const Dashboard = ({
 
     className: "w-4 h-4 mr-2"
 
-  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))) : /*#__PURE__*/React.createElement(AnaliseConcorrentes,null));
+  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))) : moduleTab==='busca' ? /*#__PURE__*/React.createElement(BuscaDireta,null) : /*#__PURE__*/React.createElement(AnaliseConcorrentes,null)));
 
 };
 
