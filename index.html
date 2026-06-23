@@ -3197,185 +3197,182 @@ const AnaliseConcorrentes = () => {
   }))))))))));
 };
 
-const RadarMercado = () => {
-  const fmtMoney = v => !v ? '-' : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1}).format(v);
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('');
-  const [concorrentes, setConcorrentes] = useState([]);
-  const [benchmark, setBenchmark] = useState(null);
-  const [meta, setMeta] = useState(null);
-  const [error, setError] = useState(null);
-  const {toast} = useToast();
+const CalendarioLicitacoes = () => {
+  const [favorites, setFavorites] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('licitahub-favorites') || '{}'); } catch { return {}; }
+  });
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selected, setSelected] = useState(null);
 
-  const fetchT = (url, ms = 8000) => {
-    const ctrl = new AbortController();
-    const id = setTimeout(() => ctrl.abort(), ms);
-    return fetch(url, {signal: ctrl.signal})
-      .finally(() => clearTimeout(id))
-      .then(r => r.ok ? r.json() : [])
-      .catch(() => []);
+  useEffect(() => {
+    const sync = () => {
+      try { setFavorites(JSON.parse(localStorage.getItem('licitahub-favorites') || '{}')); } catch {}
+    };
+    window.addEventListener('lh:favoritesChanged', sync);
+    return () => window.removeEventListener('lh:favoritesChanged', sync);
+  }, []);
+
+  const getWeekDays = (offset) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const dow = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + offset * 7);
+    return Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
   };
 
-  const buscar = async () => {
-    if (!query.trim()) return;
-    setLoading(true); setError(null); setConcorrentes([]); setBenchmark(null); setMeta(null);
-    try {
-      setStep('Buscando pregoes no PNCP...');
-
-      let editais = [];
-      try {
-        editais = await Promise.race([
-          searchPNCP(query, 1, false, 'edital'),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout_search')), 12000))
-        ]);
-      } catch(e) {
-        throw new Error(e.message === 'timeout_search'
-          ? 'A busca no PNCP demorou demais. Verifique sua conexao e tente novamente.'
-          : e.message);
-      }
-
-      if (!editais || editais.length === 0) {
-        setError('Nenhum pregao encontrado para esse termo. Tente palavras diferentes.');
-        setLoading(false); setStep(''); return;
-      }
-
-      const top = editais.map(e => {
-        const raw = e.id.replace(/^pncp-/, '');
-        const m = raw.match(/^(\d{14})-(\d{4})-(\d+)$/);
-        return m ? {cnpj: m[1], ano: m[2], seq: parseInt(m[3], 10)} : null;
-      }).filter(Boolean).slice(0, 4);
-
-      if (top.length === 0) {
-        setError('Pregoes encontrados mas sem dados de orgao suficientes para buscar vencedores. Tente outro termo.');
-        setLoading(false); setStep(''); return;
-      }
-
-      setStep(`Buscando itens de ${top.length} pregoes...`);
-
-      const itemsPerEdital = await Promise.allSettled(
-        top.map(e => fetchT(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens?pagina=1&tamanhoPagina=10`))
-      );
-
-      const resultPromises = [];
-      let totalComResultado = 0;
-      top.forEach((e, i) => {
-        const raw = itemsPerEdital[i].status === 'fulfilled' ? itemsPerEdital[i].value : [];
-        const lista = Array.isArray(raw) ? raw : [];
-        const comResultado = lista.filter(it => it.temResultado === true).slice(0, 5);
-        totalComResultado += comResultado.length;
-        comResultado.forEach(it => {
-          const num = it.numeroItem;
-          if (!num) return;
-          resultPromises.push(
-            fetchT(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens/${num}/resultados?pagina=1&tamanhoPagina=5`)
-          );
-        });
-      });
-
-      if (resultPromises.length === 0) {
-        setError(`Nenhum item homologado encontrado nos ${top.length} pregoes analisados. Os resultados ainda podem estar sendo publicados no PNCP.`);
-        setLoading(false); setStep(''); return;
-      }
-
-      setStep(`Buscando vencedores de ${resultPromises.length} itens homologados...`);
-      const allResults = await Promise.allSettled(resultPromises);
-
-      const map = {};
-      const precos = [];
-      allResults.forEach(res => {
-        if (res.status !== 'fulfilled') return;
-        const lista = Array.isArray(res.value) ? res.value : [];
-        lista.forEach(r => {
-          const cnpj = r.niFornecedor || '';
-          const nome = r.nomeRazaoSocialFornecedor || '';
-          const preco = r.valorUnitarioHomologado || 0;
-          const qtd = r.quantidadeHomologada || 1;
-          if (!cnpj || cnpj.length < 11) return;
-          if (!map[cnpj]) map[cnpj] = {cnpj, nome, totalItens: 0, totalValor: 0, menorPreco: Infinity, maiorPreco: 0};
-          map[cnpj].totalItens++;
-          map[cnpj].totalValor += preco * qtd;
-          if (preco > 0) {
-            if (preco < map[cnpj].menorPreco) map[cnpj].menorPreco = preco;
-            if (preco > map[cnpj].maiorPreco) map[cnpj].maiorPreco = preco;
-            precos.push(preco);
-          }
-        });
-      });
-
-      const sorted = Object.values(map).sort((a,b) => b.totalItens - a.totalItens).slice(0, 25);
-      sorted.forEach(c => { if (c.menorPreco === Infinity) c.menorPreco = 0; });
-
-      if (precos.length > 0) setBenchmark({
-        min: Math.min(...precos), max: Math.max(...precos),
-        media: precos.reduce((a,b) => a+b, 0) / precos.length,
-        amostras: precos.length
-      });
-
-      setConcorrentes(sorted);
-      setMeta({editais: top.length, itens: resultPromises.length});
-
-      if (sorted.length === 0) {
-        setError(`${resultPromises.length} itens consultados mas nenhum vencedor com CNPJ identificado. Tente um termo mais especifico.`);
-      }
-    } catch(e) {
-      setError(e.message || 'Erro inesperado ao buscar dados');
-    }
-    setLoading(false); setStep('');
+  const parseDateOnly = (raw) => {
+    if (!raw || raw.startsWith('1970')) return null;
+    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3])) : null;
   };
 
-  return /*#__PURE__*/React.createElement("div",{className:"flex-1 flex overflow-auto"},
-    /*#__PURE__*/React.createElement("div",{className:"flex-1 min-w-0 max-w-[98%] mx-auto px-4 py-6 space-y-4"},
-      /*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
-        /*#__PURE__*/React.createElement("h2",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-2"},
-          /*#__PURE__*/React.createElement(Icon,{name:"trending",className:"h-4 w-4 text-indigo-500"}),
-          "Radar de Mercado"),
-        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},"Busca nos editais mais recentes do PNCP e retorna as empresas que venceram itens similares, com benchmark de preco unitario homologado."),
-        /*#__PURE__*/React.createElement("div",{className:"flex gap-2"},
-          /*#__PURE__*/React.createElement("input",{type:"text",value:query,onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&buscar(),placeholder:"Ex: digitalizacao, gestao documental, guarda de documentos...",className:"flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"}),
-          /*#__PURE__*/React.createElement("button",{onClick:buscar,disabled:loading||!query.trim(),className:"px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"},loading?'Buscando...':'Buscar')
+  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+
+  const toKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  const buildEvents = (favs) => {
+    const ev = {};
+    Object.values(favs).forEach(item => {
+      const cert = parseDateOnly(item.rawDate);
+      if (!cert) return;
+      const certKey = toKey(cert);
+      if (!ev[certKey]) ev[certKey] = [];
+      ev[certKey].push({item, tipo:'certame'});
+      const quest = addDays(cert, -3);
+      const questKey = toKey(quest);
+      if (!ev[questKey]) ev[questKey] = [];
+      ev[questKey].push({item, tipo:'questionamento'});
+    });
+    return ev;
+  };
+
+  const weekDays = getWeekDays(weekOffset);
+  const events = buildEvents(favorites);
+  const todayD = new Date(); todayD.setHours(0,0,0,0);
+  const DIAS = ['Seg','Ter','Qua','Qui','Sex','Sab','Dom'];
+  const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+  const weekLabel = () => {
+    const f = weekDays[0], l = weekDays[6];
+    if (f.getMonth() === l.getMonth()) return `${f.getDate()} a ${l.getDate()} de ${MESES[f.getMonth()]} ${f.getFullYear()}`;
+    return `${f.getDate()} ${MESES[f.getMonth()]} a ${l.getDate()} ${MESES[l.getMonth()]} ${l.getFullYear()}`;
+  };
+
+  const handleCardClick = (ev) => setSelected(p => p && p.item.id === ev.item.id && p.tipo === ev.tipo ? null : ev);
+
+  const gotoFavoritos = () => { window.dispatchEvent(new CustomEvent('lh:navFavoritos')); setSelected(null); };
+
+  const removeFav = (id) => {
+    const nf = {...favorites}; delete nf[id];
+    localStorage.setItem('licitahub-favorites', JSON.stringify(nf));
+    setFavorites(nf); setSelected(null);
+    window.dispatchEvent(new CustomEvent('lh:favoritesChanged'));
+  };
+
+  const favCount = Object.keys(favorites).length;
+  const btnBase = 'px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300';
+
+  return /*#__PURE__*/React.createElement("div",{className:"flex-1 overflow-auto"},
+    /*#__PURE__*/React.createElement("div",{className:"max-w-[98%] mx-auto px-4 py-6 space-y-4"},
+
+      /*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-4 flex flex-wrap items-center gap-3 justify-between"},
+        /*#__PURE__*/React.createElement("div",{className:"flex items-center gap-2"},
+          /*#__PURE__*/React.createElement("button",{onClick:()=>setWeekOffset(w=>w-1),className:btnBase},"< Anterior"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>setWeekOffset(0),className:btnBase+(weekOffset===0?' bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400':'')},"Hoje"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>setWeekOffset(w=>w+1),className:btnBase},"Proximo >")
+        ),
+        /*#__PURE__*/React.createElement("span",{className:"text-sm font-bold text-slate-700 dark:text-slate-200"},weekLabel()),
+        /*#__PURE__*/React.createElement("div",{className:"flex items-center gap-3 text-xs text-slate-400 flex-wrap"},
+          /*#__PURE__*/React.createElement("span",{className:"flex items-center gap-1"},
+            /*#__PURE__*/React.createElement("span",{className:"h-2.5 w-2.5 rounded-sm bg-red-400 inline-block"}),
+            "Prazo quest."),
+          /*#__PURE__*/React.createElement("span",{className:"flex items-center gap-1"},
+            /*#__PURE__*/React.createElement("span",{className:"h-2.5 w-2.5 rounded-sm bg-orange-400 inline-block"}),
+            "Certame"),
+          /*#__PURE__*/React.createElement("span",{className:"text-slate-300 dark:text-slate-600"},"|"),
+          /*#__PURE__*/React.createElement("span",null,favCount," favorito(s)")
         )
       ),
-      loading&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-10 flex flex-col items-center gap-3"},
-        /*#__PURE__*/React.createElement("div",{className:"animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"}),
-        /*#__PURE__*/React.createElement("p",{className:"text-sm text-slate-500 text-center"},step||'Consultando PNCP...'),
-        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 text-center"},"Pode levar ate 15 segundos dependendo do PNCP")
-      ),
-      !loading&&error&&/*#__PURE__*/React.createElement("div",{className:"bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-red-700 dark:text-red-400 text-sm"},error),
-      !loading&&benchmark&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
-        /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-2"},
-          /*#__PURE__*/React.createElement(Icon,{name:"zap",className:"h-4 w-4 text-green-500"}),"Benchmark de Preco"),
-        meta&&/*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},benchmark.amostras," amostras | ",meta.editais," pregoes | ",meta.itens," itens com resultado"),
-        /*#__PURE__*/React.createElement("div",{className:"grid grid-cols-3 gap-3"},
-          /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-xl"},
-            /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Minimo"),
-            /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-green-700 dark:text-green-400"},fmtMoney(benchmark.min))),
-          /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl"},
-            /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Media"),
-            /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-indigo-700 dark:text-indigo-400"},fmtMoney(benchmark.media))),
-          /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-xl"},
-            /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Maximo"),
-            /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-red-700 dark:text-red-400"},fmtMoney(benchmark.max)))
+
+      /*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden"},
+        /*#__PURE__*/React.createElement("div",{className:"grid grid-cols-7 border-b border-slate-200 dark:border-slate-700"},
+          weekDays.map((day,i)=>{
+            const isToday = day.getTime()===todayD.getTime();
+            return /*#__PURE__*/React.createElement("div",{key:i,className:`p-2 sm:p-3 text-center border-r last:border-r-0 border-slate-200 dark:border-slate-700${isToday?' bg-indigo-50 dark:bg-indigo-900/30':''}`},
+              /*#__PURE__*/React.createElement("p",{className:`text-xs font-semibold uppercase tracking-wide${isToday?' text-indigo-600 dark:text-indigo-400':' text-slate-400'}`},DIAS[i]),
+              /*#__PURE__*/React.createElement("p",{className:`text-base sm:text-lg font-bold${isToday?' text-indigo-600 dark:text-indigo-400':' text-slate-700 dark:text-slate-200'}`},day.getDate()),
+              /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400"},MESES[day.getMonth()])
+            );
+          })
+        ),
+        /*#__PURE__*/React.createElement("div",{className:"grid grid-cols-7 min-h-[360px]"},
+          weekDays.map((day,i)=>{
+            const dayKey = toKey(day);
+            const dayEv = events[dayKey]||[];
+            const isToday = day.getTime()===todayD.getTime();
+            return /*#__PURE__*/React.createElement("div",{key:i,className:`p-1.5 border-r last:border-r-0 border-slate-200 dark:border-slate-700 space-y-1${isToday?' bg-indigo-50/40 dark:bg-indigo-900/10':''}`},
+              dayEv.map((ev,j)=>{
+                const isSel = selected&&selected.item.id===ev.item.id&&selected.tipo===ev.tipo;
+                const isQ = ev.tipo==='questionamento';
+                return /*#__PURE__*/React.createElement("button",{
+                  key:j,
+                  onClick:()=>handleCardClick(ev),
+                  title:(isQ?'Prazo questionamento: ':'Certame: ')+ev.item.objetoCompra,
+                  className:`w-full text-left p-1.5 rounded-lg text-xs font-medium transition-all shadow-sm cursor-pointer${
+                    isQ
+                      ? ' bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800'
+                      : ' bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800'
+                  }${isSel?' ring-2 ring-offset-1 '+(isQ?'ring-red-400':'ring-orange-400'):''}`
+                },
+                  /*#__PURE__*/React.createElement("p",{className:"truncate font-semibold leading-tight text-[10px] sm:text-xs"},ev.item.objetoCompra||'Sem titulo'),
+                  /*#__PURE__*/React.createElement("p",{className:"truncate opacity-70 mt-0.5 text-[9px] sm:text-[10px]"},isQ?'Prazo quest.':'Certame')
+                );
+              })
+            );
+          })
         )
       ),
-      !loading&&concorrentes.length>0&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
-        /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"},
-          /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4 text-indigo-500"}),"Concorrentes - ",concorrentes.length," empresa(s) identificada(s)"),
-        /*#__PURE__*/React.createElement("div",{className:"space-y-2"},
-          concorrentes.map((comp,i)=>/*#__PURE__*/React.createElement("div",{key:i,className:"flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"},
-            /*#__PURE__*/React.createElement("span",{className:"text-xs font-bold text-slate-400 w-5 shrink-0 text-right mt-0.5"},i+1),
-            /*#__PURE__*/React.createElement("div",{className:"flex-1 min-w-0"},
-              /*#__PURE__*/React.createElement("p",{className:"text-sm font-semibold text-slate-700 dark:text-slate-200 truncate"},comp.nome||'(nome nao disponivel)'),
-              /*#__PURE__*/React.createElement("p",{className:"text-xs font-mono text-slate-400 mt-0.5"},comp.cnpj),
-              /*#__PURE__*/React.createElement("div",{className:"flex gap-2 mt-1.5 flex-wrap"},
-                /*#__PURE__*/React.createElement("span",{className:"text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full"},comp.totalItens," item(ns) vencido(s)"),
-                comp.totalValor>0&&/*#__PURE__*/React.createElement("span",{className:"text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full"},"Total: ",fmtMoney(comp.totalValor)),
-                comp.menorPreco>0&&/*#__PURE__*/React.createElement("span",{className:"text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full"},"De ",fmtMoney(comp.menorPreco)," a ",fmtMoney(comp.maiorPreco))
-              )
-            )
-          ))
+
+      selected&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-5"},
+        /*#__PURE__*/React.createElement("div",{className:"flex items-start justify-between gap-4 mb-3"},
+          /*#__PURE__*/React.createElement("div",{className:"flex items-center gap-2 flex-wrap"},
+            /*#__PURE__*/React.createElement("span",{className:`px-2.5 py-0.5 rounded-full text-xs font-bold${selected.tipo==='questionamento'?' bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300':' bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'}`},
+              selected.tipo==='questionamento'?'Prazo de Questionamento (estimado)':'Data do Certame'),
+            /*#__PURE__*/React.createElement("span",{className:"text-xs text-slate-400"},selected.item.modalidadeNome||'')
+          ),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>setSelected(null),className:"p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 shrink-0"},
+            /*#__PURE__*/React.createElement(Icon,{name:"x",className:"h-4 w-4"}))
+        ),
+        /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 leading-snug"},selected.item.objetoCompra||'Sem titulo'),
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-500 dark:text-slate-400 mb-1"},selected.item.orgaoEntidade?.razaoSocial||''),
+        /*#__PURE__*/React.createElement("div",{className:"flex flex-wrap gap-2 mb-4 text-xs text-slate-400"},
+          selected.item.uf&&/*#__PURE__*/React.createElement("span",null,selected.item.uf),
+          selected.item.situacao&&/*#__PURE__*/React.createElement("span",null,"| ",selected.item.situacao),
+          selected.item.dataFimRecebimento&&/*#__PURE__*/React.createElement("span",null,"| Sessao: ",selected.item.dataFimRecebimento)
+        ),
+        /*#__PURE__*/React.createElement("div",{className:"flex gap-2 flex-wrap"},
+          /*#__PURE__*/React.createElement("button",{
+            onClick:gotoFavoritos,
+            className:"px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors"
+          },"Ver em Favoritos"),
+          selected.item.linkSistemaOrigem&&/*#__PURE__*/React.createElement("a",{
+            href:selected.item.linkSistemaOrigem,target:"_blank",rel:"noopener noreferrer",
+            className:"px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          },"Abrir no PNCP"),
+          /*#__PURE__*/React.createElement("button",{
+            onClick:()=>removeFav(selected.item.id),
+            className:"px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          },"Remover dos Favoritos")
         )
+      ),
+
+      favCount===0&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-12 flex flex-col items-center gap-3 text-center"},
+        /*#__PURE__*/React.createElement(Icon,{name:"star",className:"h-10 w-10 text-slate-300 dark:text-slate-600"}),
+        /*#__PURE__*/React.createElement("p",{className:"text-sm font-semibold text-slate-600 dark:text-slate-400"},"Nenhum favorito ainda"),
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 max-w-xs"},"Favorita editais na aba Busca de Editais para que eles aparecam aqui organizados por data de certame e prazo de questionamento estimado.")
       )
+
     )
   );
 };
@@ -4096,6 +4093,12 @@ const Dashboard = ({
     return () => clearInterval(intervalId);
 
   }, [isRadarActive, radarIntervalMin]);
+
+  useEffect(() => {
+    const handler = () => { setActiveTab('FAVORITOS'); setModuleTab('editais'); };
+    window.addEventListener('lh:navFavoritos', handler);
+    return () => window.removeEventListener('lh:navFavoritos', handler);
+  }, []);
 
   const isFavoritesView = activeTab === 'FAVORITOS';
 
@@ -5022,7 +5025,7 @@ const Dashboard = ({
     /*#__PURE__*/React.createElement("button",{onClick:function(){setModuleTab('editais');},className:moduleTab==='editais'?'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400':'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700'},
     /*#__PURE__*/React.createElement(Icon,{name:"search",className:"h-4 w-4"}),"Busca de Editais"),
     /*#__PURE__*/React.createElement("button",{onClick:function(){setModuleTab('radar');},className:moduleTab==='radar'?'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400':'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700'},
-    /*#__PURE__*/React.createElement(Icon,{name:"trending",className:"h-4 w-4"}),"Radar de Mercado"),
+    /*#__PURE__*/React.createElement(Icon,{name:"calendar",className:"h-4 w-4"}),"Calendario"),
     /*#__PURE__*/React.createElement("button",{onClick:function(){setModuleTab('concorrentes');},className:moduleTab==='concorrentes'?'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400':'flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700'},
     /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4"}),"Análise de Concorrentes")
   )
@@ -6521,7 +6524,7 @@ const Dashboard = ({
 
     className: "w-4 h-4 mr-2"
 
-  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))) : moduleTab==='concorrentes' ? /*#__PURE__*/React.createElement(AnaliseConcorrentes,null) : /*#__PURE__*/React.createElement(RadarMercado,null));
+  }), "Mostrar mais editais (", displayedItems.length - visibleCount, " restantes)"))))))) : moduleTab==='concorrentes' ? /*#__PURE__*/React.createElement(AnaliseConcorrentes,null) : /*#__PURE__*/React.createElement(CalendarioLicitacoes,null));
 
 };
 
