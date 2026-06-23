@@ -3198,144 +3198,148 @@ const AnaliseConcorrentes = () => {
 };
 
 const RadarMercado = () => {
-  const fmtMoney = v => !v ? '—' : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1}).format(v);
+  const fmtMoney = v => !v ? '-' : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1}).format(v);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState('');
-  const [servicos, setServicos] = useState([]);
-  const [selectedCode, setSelectedCode] = useState(null);
+  const [step, setStep] = useState('');
   const [concorrentes, setConcorrentes] = useState([]);
   const [benchmark, setBenchmark] = useState(null);
+  const [editaisAnalisados, setEditaisAnalisados] = useState(0);
+  const [totalItens, setTotalItens] = useState(0);
   const [error, setError] = useState(null);
   const {toast} = useToast();
-  const buscarServico = async () => {
+
+  const buscar = async () => {
     if (!query.trim()) return;
-    setLoading(true); setError(null); setServicos([]); setSelectedCode(null); setConcorrentes([]); setBenchmark(null);
-    setLoadingStep('Consultando catálogo CATSER...');
+    setLoading(true); setError(null); setConcorrentes([]); setBenchmark(null); setEditaisAnalisados(0); setTotalItens(0);
     try {
-      const r = await fetch(`https://dadosabertos.compras.gov.br/modulo-servico/6_consultarItemServico?statusServico=A&descricaoServico=${encodeURIComponent(query)}&pagina=1&tamanhoPagina=20`);
-      if (!r.ok) throw new Error('Erro ao consultar catálogo. Tente novamente.');
-      const d = await r.json();
-      const lista = Array.isArray(d) ? d : (d.resultado || d.data || []);
-      setServicos(lista);
-      if (lista.length === 0) setError('Nenhum serviço encontrado. Tente termos diferentes: "digitalização", "guarda", "arquivo".');
-    } catch(e) { setError(e.message || 'Erro ao buscar catálogo de serviços'); }
-    setLoading(false); setLoadingStep('');
-  };
-  const analisarServico = async (codigo, descricao) => {
-    setSelectedCode({codigo, descricao}); setConcorrentes([]); setBenchmark(null);
-    setLoading(true); setError(null);
-    try {
-      setLoadingStep('Buscando pregões com esse serviço nos últimos 2 anos...');
-      const hoje = new Date();
-      const ini2y = new Date(hoje); ini2y.setFullYear(ini2y.getFullYear()-2);
-      const ini = ini2y.toISOString().slice(0,10).replace(/-/g,'');
-      const fim = hoje.toISOString().slice(0,10).replace(/-/g,'');
-      const [resItens, resBench] = await Promise.allSettled([
-        fetch(`https://dadosabertos.compras.gov.br/modulo-contratacoes/3_consultarResultadoItensContratacoes_PNCP_14133?dataResultadoPncpInicial=${ini}&dataResultadoPncpFinal=${fim}&codigoItemCatalogo=${codigo}&pagina=1&tamanhoPagina=500`).then(r=>r.ok?r.json():null).catch(()=>null),
-        fetch(`https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/3_consultarServico?codigoItemCatalogo=${codigo}&dataCompraInicio=${ini}&dataCompraFim=${fim}`).then(r=>r.ok?r.json():null).catch(()=>null)
-      ]);
-      setLoadingStep('Processando concorrentes...');
-      const benchData = resBench.value;
-      if (benchData) {
-        const prices = Array.isArray(benchData) ? benchData : (benchData.resultado||benchData.data||[]);
-        const vals = prices.map(p=>p.valorUnitario||p.preco||0).filter(v=>v>0);
-        if (vals.length>0) setBenchmark({min:Math.min(...vals),max:Math.max(...vals),media:vals.reduce((a,b)=>a+b,0)/vals.length,amostras:vals.length});
+      setStep('Buscando pregoes recentes no PNCP...');
+      const editais = await searchPNCP(query, 1, false, 'edital');
+      if (!editais || editais.length === 0) {
+        setError('Nenhum pregao encontrado para esse termo. Tente palavras diferentes ou verifique a ortografia.');
+        setLoading(false); setStep(''); return;
       }
-      const itensData = resItens.value;
-      const lista = itensData ? (Array.isArray(itensData)?itensData:(itensData.resultado||itensData.data||[])) : [];
-      const map = {};
-      lista.forEach(item => {
-        const cnpj = item.niFornecedor||item.cnpjFornecedor||'';
-        const nome = item.nomeRazaoSocialFornecedor||item.nomeFornecedor||'';
-        if (!cnpj||cnpj.length<11) return;
-        if (!map[cnpj]) map[cnpj]={cnpj,nome,totalPregoes:0,totalValor:0,menorPreco:Infinity,maiorPreco:0};
-        const val = item.valorUnitarioHomologado||item.valorHomologado||0;
-        const qtd = item.quantidadeHomologada||1;
-        map[cnpj].totalPregoes++;
-        map[cnpj].totalValor += val*qtd;
-        if (val>0){if(val<map[cnpj].menorPreco)map[cnpj].menorPreco=val;if(val>map[cnpj].maiorPreco)map[cnpj].maiorPreco=val;}
+      const top = editais.map(e => {
+        const raw = e.id.replace(/^pncp-/, '');
+        const m = raw.match(/^(\d{14})-(\d{4})-(\d+)$/);
+        if (!m) return null;
+        return {cnpj: m[1], ano: m[2], seq: m[3]};
+      }).filter(Boolean).slice(0, 6);
+      if (top.length === 0) {
+        setError('Nao foi possivel extrair dados dos pregoes encontrados. Tente outro termo.');
+        setLoading(false); setStep(''); return;
+      }
+      setStep(`Analisando ${top.length} pregoes - buscando itens...`);
+      const itemsResults = await Promise.allSettled(
+        top.map(e =>
+          fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens?pagina=1&tamanhoPagina=10`)
+            .then(r => r.ok ? r.json() : []).catch(() => [])
+        )
+      );
+      const allResultPromises = [];
+      top.forEach((e, i) => {
+        const raw = itemsResults[i].status === 'fulfilled' ? itemsResults[i].value : [];
+        const itemList = Array.isArray(raw) ? raw : (raw.data || []);
+        itemList.slice(0, 6).forEach(item => {
+          const num = item.numeroItem || item.numero || item.id;
+          if (!num) return;
+          allResultPromises.push(
+            fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens/${num}/resultados?pagina=1&tamanhoPagina=5`)
+              .then(r => r.ok ? r.json() : []).catch(() => [])
+          );
+        });
       });
-      const sorted = Object.values(map).sort((a,b)=>b.totalPregoes-a.totalPregoes).slice(0,25);
-      sorted.forEach(c=>{if(c.menorPreco===Infinity)c.menorPreco=0;});
+      setStep(`Buscando vencedores de ${allResultPromises.length} itens...`);
+      const allResults = await Promise.allSettled(allResultPromises);
+      const map = {};
+      const precos = [];
+      let itensComResultado = 0;
+      allResults.forEach(res => {
+        if (res.status !== 'fulfilled') return;
+        const lista = Array.isArray(res.value) ? res.value : (res.value?.data || []);
+        if (lista.length > 0) itensComResultado++;
+        lista.forEach(r => {
+          const cnpj = r.niFornecedor || '';
+          const nome = r.nomeRazaoSocialFornecedor || '';
+          const preco = r.valorUnitarioHomologado || 0;
+          const qtd = r.quantidadeHomologada || 1;
+          if (!cnpj || cnpj.length < 11) return;
+          if (!map[cnpj]) map[cnpj] = {cnpj, nome, totalItens: 0, totalValor: 0, menorPreco: Infinity, maiorPreco: 0};
+          map[cnpj].totalItens++;
+          map[cnpj].totalValor += preco * qtd;
+          if (preco > 0) {
+            if (preco < map[cnpj].menorPreco) map[cnpj].menorPreco = preco;
+            if (preco > map[cnpj].maiorPreco) map[cnpj].maiorPreco = preco;
+            precos.push(preco);
+          }
+        });
+      });
+      const sorted = Object.values(map).sort((a,b) => b.totalItens - a.totalItens).slice(0, 25);
+      sorted.forEach(c => { if (c.menorPreco === Infinity) c.menorPreco = 0; });
+      if (precos.length > 0) setBenchmark({min: Math.min(...precos), max: Math.max(...precos), media: precos.reduce((a,b)=>a+b,0)/precos.length, amostras: precos.length});
       setConcorrentes(sorted);
-      if (sorted.length===0&&lista.length===0) setError('Nenhum resultado homologado encontrado para esse código nos últimos 2 anos. Os dados podem não ter sido publicados ainda no PNCP.');
-    } catch(e) { setError(e.message||'Erro ao buscar dados'); }
-    setLoading(false); setLoadingStep('');
+      setEditaisAnalisados(top.length);
+      setTotalItens(itensComResultado);
+      if (sorted.length === 0) setError(`Nenhum vencedor identificado nos ${top.length} pregoes analisados. Os resultados podem nao ter sido publicados ainda no PNCP, ou o pregao ainda esta em andamento.`);
+    } catch(e) { setError(e.message || 'Erro ao buscar dados'); }
+    setLoading(false); setStep('');
   };
-  const tabBase = 'flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700';
+
   return /*#__PURE__*/React.createElement("div",{className:"flex-1 flex overflow-auto"},
     /*#__PURE__*/React.createElement("div",{className:"flex-1 min-w-0 max-w-[98%] mx-auto px-4 py-6 space-y-4"},
       /*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
         /*#__PURE__*/React.createElement("h2",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-2"},
           /*#__PURE__*/React.createElement(Icon,{name:"trending",className:"h-4 w-4 text-indigo-500"}),
-          “Radar de Mercado — CATMAT / CATSER”),
-        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},"Descubra quem vence pregões do seu segmento e a que preço, usando os catálogos oficiais do governo federal (dadosabertos.compras.gov.br)."),
+          "Radar de Mercado"),
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},"Descubra quem venceu pregoes similares ao seu e a que preco. Busca nos editais mais recentes do PNCP e retorna os vencedores de cada item."),
         /*#__PURE__*/React.createElement("div",{className:"flex gap-2"},
-          /*#__PURE__*/React.createElement("input",{type:"text",value:query,onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&buscarServico(),placeholder:"Ex: digitalização, gestão documental, guarda de documentos...",className:"flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"}),
-          /*#__PURE__*/React.createElement("button",{onClick:buscarServico,disabled:loading||!query.trim(),className:"px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"},loading&&!selectedCode?'Buscando...':'Buscar')
+          /*#__PURE__*/React.createElement("input",{type:"text",value:query,onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&buscar(),placeholder:"Ex: digitalizacao de documentos, gestao documental, guarda de documentos...",className:"flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"}),
+          /*#__PURE__*/React.createElement("button",{onClick:buscar,disabled:loading||!query.trim(),className:"px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"},loading?'Buscando...':'Buscar')
         )
       ),
       loading&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-10 flex flex-col items-center gap-3"},
         /*#__PURE__*/React.createElement("div",{className:"animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"}),
-        /*#__PURE__*/React.createElement("p",{className:"text-sm text-slate-500"},loadingStep||'Consultando...')
+        /*#__PURE__*/React.createElement("p",{className:"text-sm text-slate-500"},step||'Consultando PNCP...')
       ),
       error&&/*#__PURE__*/React.createElement("div",{className:"bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-red-700 dark:text-red-400 text-sm"},error),
-      !loading&&servicos.length>0&&!selectedCode&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
-        /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-3"},"Selecione o serviço para analisar (",servicos.length," encontrados)"),
+      !loading&&benchmark&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
+        /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-2"},
+          /*#__PURE__*/React.createElement(Icon,{name:"zap",className:"h-4 w-4 text-green-500"}),"Benchmark de Preco"),
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},benchmark.amostras," amostras de preco unitario homologado em ",editaisAnalisados," pregoes (",totalItens," itens com resultado)"),
+        /*#__PURE__*/React.createElement("div",{className:"grid grid-cols-3 gap-3"},
+          /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-xl"},
+            /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Minimo"),
+            /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-green-700 dark:text-green-400"},fmtMoney(benchmark.min))),
+          /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl"},
+            /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Media"),
+            /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-indigo-700 dark:text-indigo-400"},fmtMoney(benchmark.media))),
+          /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-xl"},
+            /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Maximo"),
+            /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-red-700 dark:text-red-400"},fmtMoney(benchmark.max)))
+        )
+      ),
+      !loading&&concorrentes.length>0&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
+        /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"},
+          /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4 text-indigo-500"}),"Concorrentes detectados - ",concorrentes.length," empresa(s) em ",editaisAnalisados," pregoes analisados"),
         /*#__PURE__*/React.createElement("div",{className:"space-y-2"},
-          servicos.map((s,i)=>/*#__PURE__*/React.createElement("div",{key:i,onClick:()=>analisarServico(s.codigoItem||s.codigo||s.id,s.descricaoItem||s.descricao||s.nome),className:"flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer transition-colors"},
-            /*#__PURE__*/React.createElement("span",{className:"font-mono text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-bold shrink-0"},s.codigoItem||s.codigo||s.id),
-            /*#__PURE__*/React.createElement("div",{className:"min-w-0"},
-              /*#__PURE__*/React.createElement("p",{className:"text-sm font-medium text-slate-700 dark:text-slate-200 truncate"},s.descricaoItem||s.descricao||s.nome),
-              s.descricaoUnidadeFornecimento&&/*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400"},"Unidade: ",s.descricaoUnidadeFornecimento)
+          concorrentes.map((comp,i)=>/*#__PURE__*/React.createElement("div",{key:i,className:"flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"},
+            /*#__PURE__*/React.createElement("span",{className:"text-xs font-bold text-slate-400 w-5 shrink-0 text-right mt-0.5"},i+1),
+            /*#__PURE__*/React.createElement("div",{className:"flex-1 min-w-0"},
+              /*#__PURE__*/React.createElement("p",{className:"text-sm font-semibold text-slate-700 dark:text-slate-200 truncate"},comp.nome||'(nome nao disponivel)'),
+              /*#__PURE__*/React.createElement("p",{className:"text-xs font-mono text-slate-400 mt-0.5"},comp.cnpj),
+              /*#__PURE__*/React.createElement("div",{className:"flex gap-2 mt-1.5 flex-wrap"},
+                /*#__PURE__*/React.createElement("span",{className:"text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full"},comp.totalItens," item(ns) vencido(s)"),
+                comp.totalValor>0&&/*#__PURE__*/React.createElement("span",{className:"text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full"},"Total: ",fmtMoney(comp.totalValor)),
+                comp.menorPreco>0&&/*#__PURE__*/React.createElement("span",{className:"text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full"},"De ",fmtMoney(comp.menorPreco)," a ",fmtMoney(comp.maiorPreco))
+              )
             )
           ))
         )
-      ),
-      !loading&&selectedCode&&/*#__PURE__*/React.createElement(React.Fragment,null,
-        /*#__PURE__*/React.createElement("div",{className:"flex items-center gap-3"},
-          /*#__PURE__*/React.createElement("button",{onClick:()=>{setSelectedCode(null);setServicos([]);setQuery('');setConcorrentes([]);setBenchmark(null);},className:"text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline"},"<- voltar"),
-          /*#__PURE__*/React.createElement("span",{className:"text-sm font-semibold text-slate-700 dark:text-slate-200"},"CATSER ",selectedCode.codigo," — ",selectedCode.descricao)
-        ),
-        benchmark&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
-          /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"},
-            /*#__PURE__*/React.createElement(Icon,{name:"zap",className:"h-4 w-4 text-green-500"}),"Benchmark de Preço — ",benchmark.amostras," amostras (últimos 2 anos)"),
-          /*#__PURE__*/React.createElement("div",{className:"grid grid-cols-3 gap-4"},
-            /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-xl"},
-              /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Mínimo"),
-              /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-green-700 dark:text-green-400"},fmtMoney(benchmark.min))),
-            /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl"},
-              /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Média"),
-              /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-indigo-700 dark:text-indigo-400"},fmtMoney(benchmark.media))),
-            /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-xl"},
-              /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Máximo"),
-              /*#__PURE__*/React.createElement("p",{className:"text-lg font-bold text-red-700 dark:text-red-400"},fmtMoney(benchmark.max)))
-          )
-        ),
-        concorrentes.length>0&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
-          /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"},
-            /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4 text-indigo-500"}),"Concorrentes detectados — ",concorrentes.length," empresas (ordenado por nº de pregões vencidos)"),
-          /*#__PURE__*/React.createElement("div",{className:"space-y-2"},
-            concorrentes.map((comp,i)=>/*#__PURE__*/React.createElement("div",{key:i,className:"flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"},
-              /*#__PURE__*/React.createElement("span",{className:"text-xs font-bold text-slate-400 w-5 shrink-0 text-right mt-0.5"},i+1),
-              /*#__PURE__*/React.createElement("div",{className:"flex-1 min-w-0"},
-                /*#__PURE__*/React.createElement("p",{className:"text-sm font-semibold text-slate-700 dark:text-slate-200 truncate"},comp.nome||'(nome não disponível)'),
-                /*#__PURE__*/React.createElement("p",{className:"text-xs font-mono text-slate-400 mt-0.5"},comp.cnpj),
-                /*#__PURE__*/React.createElement("div",{className:"flex gap-2 mt-1.5 flex-wrap"},
-                  /*#__PURE__*/React.createElement("span",{className:"text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full"},comp.totalPregoes," pregão(ões)"),
-                  comp.totalValor>0&&/*#__PURE__*/React.createElement("span",{className:"text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full"},"Total: ",fmtMoney(comp.totalValor)),
-                  comp.menorPreco>0&&/*#__PURE__*/React.createElement("span",{className:"text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full"},"De ",fmtMoney(comp.menorPreco)," a ",fmtMoney(comp.maiorPreco))
-                )
-              )
-            ))
-          )
-        ),
-        concorrentes.length===0&&!loading&&!error&&/*#__PURE__*/React.createElement("div",{className:"bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-5 text-amber-700 dark:text-amber-400 text-sm"},"Nenhum resultado homologado encontrado nos últimos 2 anos. Experimente outro código do catálogo.")
       )
     )
   );
 };
+
 
 const Dashboard = ({
 
