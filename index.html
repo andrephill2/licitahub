@@ -3212,22 +3212,25 @@ const CalendarioLicitacoes = () => {
     return () => window.removeEventListener('lh:favoritesChanged', sync);
   }, []);
 
+  const getMonday = (d) => {
+    const r = new Date(d); r.setHours(0,0,0,0);
+    const dow = r.getDay();
+    r.setDate(r.getDate() - (dow === 0 ? 6 : dow - 1));
+    return r;
+  };
+
   const getWeekDays = (offset) => {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const dow = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + offset * 7);
+    const monday = getMonday(new Date());
+    monday.setDate(monday.getDate() + offset * 7);
     return Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
   };
 
-  // Parse "DD/MM/YYYY HH:MM" (output of formatDateTime) → local Date
   const parseFimDate = (s) => {
     if (!s) return null;
     const m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
     return m ? new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1])) : null;
   };
 
-  // Fallback: parse raw ISO "YYYY-MM-DD..."
   const parseRawDate = (s) => {
     if (!s || String(s).startsWith('1970')) return null;
     const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -3240,16 +3243,11 @@ const CalendarioLicitacoes = () => {
   const buildEvents = (favs) => {
     const ev = {};
     Object.values(favs).forEach(item => {
-      // Data de participacao = fim do recebimento de propostas = data da sessao
       const part = parseFimDate(item.dataFimRecebimento) || parseRawDate(item.rawDate);
       if (!part) return;
-
-      // Orange: data de participacao (sessao)
       const partKey = toKey(part);
       if (!ev[partKey]) ev[partKey] = [];
       ev[partKey].push({item, tipo:'participacao'});
-
-      // Red: prazo para registro de recurso = participacao + 3 dias
       const rec = addDays(part, 3);
       const recKey = toKey(rec);
       if (!ev[recKey]) ev[recKey] = [];
@@ -3257,6 +3255,23 @@ const CalendarioLicitacoes = () => {
     });
     return ev;
   };
+
+  // Auto-jump to nearest event week on first render
+  useEffect(() => {
+    const favs = favorites;
+    if (Object.keys(favs).length === 0) return;
+    const evs = buildEvents(favs);
+    const keys = Object.keys(evs);
+    if (keys.length === 0) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dates = keys.map(k => { const [y,mo,d] = k.split('-'); return new Date(+y,+mo-1,+d); });
+    const upcoming = dates.filter(d => d >= today).sort((a,b) => a-b);
+    const target = upcoming.length > 0 ? upcoming[0] : dates.sort((a,b) => b-a)[0];
+    const todayMonday = getMonday(today);
+    const targetMonday = getMonday(target);
+    const diffWeeks = Math.round((targetMonday - todayMonday) / (7*24*60*60*1000));
+    if (diffWeeks !== 0) setWeekOffset(diffWeeks);
+  }, []); // eslint-disable-line
 
   const weekDays = getWeekDays(weekOffset);
   const events = buildEvents(favorites);
@@ -3269,6 +3284,9 @@ const CalendarioLicitacoes = () => {
     if (f.getMonth() === l.getMonth()) return `${f.getDate()} a ${l.getDate()} de ${MESES[f.getMonth()]} ${f.getFullYear()}`;
     return `${f.getDate()} ${MESES[f.getMonth()]} a ${l.getDate()} ${MESES[l.getMonth()]} ${l.getFullYear()}`;
   };
+
+  const weekHasEvents = weekDays.some(d => (events[toKey(d)]||[]).length > 0);
+  const totalEvents = Object.values(events).flat().length;
 
   const handleCardClick = (ev) => setSelected(p => p && p.item.id === ev.item.id && p.tipo === ev.tipo ? null : ev);
   const gotoFavoritos = () => { window.dispatchEvent(new CustomEvent('lh:navFavoritos')); setSelected(null); };
@@ -3343,6 +3361,10 @@ const CalendarioLicitacoes = () => {
               })
             );
           })
+        ),
+        favCount>0&&!weekHasEvents&&/*#__PURE__*/React.createElement("div",{className:"border-t border-slate-200 dark:border-slate-700 px-4 py-3 text-center text-xs text-slate-400"},
+          "Nenhum evento nesta semana. ",
+          totalEvents>0&&/*#__PURE__*/React.createElement("span",null,"Ha ",Math.floor(totalEvents/2)," licitacao(oes) com datas em outras semanas — use < Anterior ou Proximo >.")
         )
       ),
 
