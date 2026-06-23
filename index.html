@@ -3201,8 +3201,20 @@ const CalendarioLicitacoes = () => {
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem('licitahub-favorites') || '{}'); } catch { return {}; }
   });
+  const [notes, setNotes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lh-cal-notes') || '{}'); } catch { return {}; }
+  });
+  const [gono, setGono] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lh-cal-gono') || '{}'); } catch { return {}; }
+  });
+  const [customEvents, setCustomEvents] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lh-cal-custom') || '{}'); } catch { return {}; }
+  });
   const [weekOffset, setWeekOffset] = useState(0);
   const [selected, setSelected] = useState(null);
+  const [editingNote, setEditingNote] = useState('');
+  const [addingCustom, setAddingCustom] = useState(null);
+  const [customInput, setCustomInput] = useState('');
 
   useEffect(() => {
     const sync = () => {
@@ -3211,6 +3223,38 @@ const CalendarioLicitacoes = () => {
     window.addEventListener('lh:favoritesChanged', sync);
     return () => window.removeEventListener('lh:favoritesChanged', sync);
   }, []);
+
+  useEffect(() => {
+    if (selected && selected.item) setEditingNote(notes[selected.item.id] || '');
+  }, [selected && selected.item && selected.item.id]);
+
+  const saveNote = (itemId, text) => {
+    const n = {...notes, [itemId]: text};
+    setNotes(n);
+    localStorage.setItem('lh-cal-notes', JSON.stringify(n));
+  };
+
+  const toggleGono = (itemId) => {
+    const n = {...gono, [itemId]: !gono[itemId]};
+    setGono(n);
+    localStorage.setItem('lh-cal-gono', JSON.stringify(n));
+  };
+
+  const addCustomEvent = (dateKey, text) => {
+    if (!text.trim()) return;
+    const existing = customEvents[dateKey] || [];
+    const n = {...customEvents, [dateKey]: [...existing, {id: String(Date.now()), text: text.trim()}]};
+    setCustomEvents(n);
+    localStorage.setItem('lh-cal-custom', JSON.stringify(n));
+  };
+
+  const removeCustomEvent = (dateKey, id) => {
+    const remaining = (customEvents[dateKey] || []).filter(e => e.id !== id);
+    const n = {...customEvents};
+    if (remaining.length > 0) n[dateKey] = remaining; else delete n[dateKey];
+    setCustomEvents(n);
+    localStorage.setItem('lh-cal-custom', JSON.stringify(n));
+  };
 
   const getMonday = (d) => {
     const r = new Date(d); r.setHours(0,0,0,0);
@@ -3256,7 +3300,12 @@ const CalendarioLicitacoes = () => {
     return ev;
   };
 
-  // Auto-jump to nearest event week on first render
+  const weekDays = getWeekDays(weekOffset);
+  const events = buildEvents(favorites);
+  const todayD = new Date(); todayD.setHours(0,0,0,0);
+  const DIAS = ['Seg','Ter','Qua','Qui','Sex','Sab','Dom'];
+  const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
   useEffect(() => {
     const favs = favorites;
     if (Object.keys(favs).length === 0) return;
@@ -3271,13 +3320,7 @@ const CalendarioLicitacoes = () => {
     const targetMonday = getMonday(target);
     const diffWeeks = Math.round((targetMonday - todayMonday) / (7*24*60*60*1000));
     if (diffWeeks !== 0) setWeekOffset(diffWeeks);
-  }, []); // eslint-disable-line
-
-  const weekDays = getWeekDays(weekOffset);
-  const events = buildEvents(favorites);
-  const todayD = new Date(); todayD.setHours(0,0,0,0);
-  const DIAS = ['Seg','Ter','Qua','Qui','Sex','Sab','Dom'];
-  const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  }, []);
 
   const weekLabel = () => {
     const f = weekDays[0], l = weekDays[6];
@@ -3285,8 +3328,11 @@ const CalendarioLicitacoes = () => {
     return `${f.getDate()} ${MESES[f.getMonth()]} a ${l.getDate()} ${MESES[l.getMonth()]} ${l.getFullYear()}`;
   };
 
-  const weekHasEvents = weekDays.some(d => (events[toKey(d)]||[]).length > 0);
-  const totalEvents = Object.values(events).flat().length;
+  const weekHasEvents = weekDays.some(d => {
+    const k = toKey(d);
+    return (events[k]||[]).length > 0 || (customEvents[k]||[]).length > 0;
+  });
+  const totalFavEvents = Object.values(events).flat().length;
 
   const handleCardClick = (ev) => setSelected(p => p && p.item.id === ev.item.id && p.tipo === ev.tipo ? null : ev);
   const gotoFavoritos = () => { window.dispatchEvent(new CustomEvent('lh:navFavoritos')); setSelected(null); };
@@ -3316,7 +3362,10 @@ const CalendarioLicitacoes = () => {
             "Participacao"),
           /*#__PURE__*/React.createElement("span",{className:"flex items-center gap-1.5"},
             /*#__PURE__*/React.createElement("span",{className:"h-2.5 w-2.5 rounded-sm bg-red-400 inline-block"}),
-            "Prazo questionamento"),
+            "Prazo quest."),
+          /*#__PURE__*/React.createElement("span",{className:"flex items-center gap-1.5"},
+            /*#__PURE__*/React.createElement("span",{className:"h-2.5 w-2.5 rounded-sm bg-violet-400 inline-block"}),
+            "Lembrete"),
           /*#__PURE__*/React.createElement("span",{className:"text-slate-300 dark:text-slate-600"},"|"),
           /*#__PURE__*/React.createElement("span",null,favCount," favorito(s)")
         )
@@ -3337,34 +3386,69 @@ const CalendarioLicitacoes = () => {
           weekDays.map((day,i)=>{
             const dayKey = toKey(day);
             const dayEv = events[dayKey]||[];
+            const dayCust = customEvents[dayKey]||[];
             const isToday = day.getTime()===todayD.getTime();
-            return /*#__PURE__*/React.createElement("div",{key:i,className:`p-1.5 border-r last:border-r-0 border-slate-200 dark:border-slate-700 space-y-1${isToday?' bg-indigo-50/40 dark:bg-indigo-900/10':''}`},
-              dayEv.map((ev,j)=>{
-                const isSel = selected&&selected.item.id===ev.item.id&&selected.tipo===ev.tipo;
-                const isP = ev.tipo==='participacao';
-                const orgao = ev.item.orgaoEntidade?.razaoSocial||'';
-                const portal = ev.item.sistema||ev.item.fonte||'';
-                return /*#__PURE__*/React.createElement("button",{
-                  key:j,
-                  onClick:()=>handleCardClick(ev),
-                  title:(isP?'Participacao: ':'Prazo questionamento: ')+orgao+' | '+ev.item.objetoCompra,
-                  className:`w-full text-left p-1.5 rounded-lg text-xs font-medium transition-all shadow-sm cursor-pointer${
-                    isP
-                      ? ' bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800'
-                      : ' bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800'
-                  }${isSel?' ring-2 ring-offset-1 '+(isP?'ring-orange-400':'ring-red-400'):''}`
-                },
-                  /*#__PURE__*/React.createElement("p",{className:"truncate font-bold leading-tight text-[10px] sm:text-xs"},orgao||'Orgao nao identificado'),
-                  portal&&/*#__PURE__*/React.createElement("p",{className:"truncate opacity-80 mt-0.5 text-[9px] sm:text-[10px] font-medium"},portal),
-                  /*#__PURE__*/React.createElement("p",{className:"truncate opacity-60 mt-0.5 text-[9px] font-normal"},isP?'Participacao':'Prazo quest.')
-                );
-              })
+            const isAddingHere = addingCustom===dayKey;
+            return /*#__PURE__*/React.createElement("div",{key:i,className:`flex flex-col p-1.5 border-r last:border-r-0 border-slate-200 dark:border-slate-700${isToday?' bg-indigo-50/40 dark:bg-indigo-900/10':''}`},
+              /*#__PURE__*/React.createElement("div",{className:"flex-1 space-y-1"},
+                dayEv.map((ev,j)=>{
+                  const isSel = selected&&selected.item&&selected.item.id===ev.item.id&&selected.tipo===ev.tipo;
+                  const isP = ev.tipo==='participacao';
+                  const isGo = gono[ev.item.id];
+                  const orgao = ev.item.orgaoEntidade?.razaoSocial||'';
+                  const portal = ev.item.sistema||ev.item.fonte||'';
+                  return /*#__PURE__*/React.createElement("button",{
+                    key:j,
+                    onClick:()=>handleCardClick(ev),
+                    title:(isP?'Participacao: ':'Prazo quest.: ')+orgao,
+                    className:`w-full text-left p-1.5 rounded-lg text-xs font-medium transition-all shadow-sm cursor-pointer${isP?' bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800':' bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800'}${isSel?' ring-2 ring-offset-1 '+(isP?'ring-orange-400':'ring-red-400'):''}`
+                  },
+                    /*#__PURE__*/React.createElement("p",{className:"truncate font-bold leading-tight text-[10px] sm:text-xs"},isGo&&"🎯 ",orgao||'Orgao nao identificado'),
+                    portal&&/*#__PURE__*/React.createElement("p",{className:"truncate opacity-80 mt-0.5 text-[9px] sm:text-[10px] font-medium"},portal),
+                    /*#__PURE__*/React.createElement("p",{className:"truncate opacity-60 mt-0.5 text-[9px] font-normal"},isP?'Participacao':'Prazo quest.')
+                  );
+                }),
+                dayCust.map((ce,j)=>
+                  /*#__PURE__*/React.createElement("button",{
+                    key:'c'+j,
+                    onClick:()=>removeCustomEvent(dayKey,ce.id),
+                    title:'Clique para remover: '+ce.text,
+                    className:"w-full text-left p-1.5 rounded-lg text-[10px] font-medium bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800 transition-colors shadow-sm"
+                  },
+                    /*#__PURE__*/React.createElement("p",{className:"truncate font-semibold leading-tight"},"📌 ",ce.text),
+                    /*#__PURE__*/React.createElement("p",{className:"opacity-60 text-[9px] mt-0.5"},"Toque p/ remover")
+                  )
+                )
+              ),
+              isAddingHere
+                ? /*#__PURE__*/React.createElement("div",{className:"mt-1 space-y-1"},
+                    /*#__PURE__*/React.createElement("input",{
+                      autoFocus:true,
+                      type:"text",
+                      value:customInput,
+                      onChange:e=>setCustomInput(e.target.value),
+                      onKeyDown:e=>{
+                        if(e.key==='Enter'){addCustomEvent(dayKey,customInput);setCustomInput('');setAddingCustom(null);}
+                        if(e.key==='Escape'){setAddingCustom(null);setCustomInput('');}
+                      },
+                      placeholder:"Lembrete...",
+                      className:"w-full px-1.5 py-1 text-[10px] rounded border border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                    }),
+                    /*#__PURE__*/React.createElement("div",{className:"flex gap-1"},
+                      /*#__PURE__*/React.createElement("button",{onClick:()=>{addCustomEvent(dayKey,customInput);setCustomInput('');setAddingCustom(null);},className:"flex-1 text-[9px] py-0.5 bg-violet-500 hover:bg-violet-600 text-white rounded font-semibold transition-colors"},"OK"),
+                      /*#__PURE__*/React.createElement("button",{onClick:()=>{setAddingCustom(null);setCustomInput('');},className:"flex-1 text-[9px] py-0.5 border border-slate-300 dark:border-slate-600 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"},"X")
+                    )
+                  )
+                : /*#__PURE__*/React.createElement("button",{
+                    onClick:()=>{setAddingCustom(dayKey);setCustomInput('');},
+                    className:"mt-1 w-full text-[9px] text-slate-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded py-0.5 transition-colors text-center"
+                  },"+ lembrete")
             );
           })
         ),
         favCount>0&&!weekHasEvents&&/*#__PURE__*/React.createElement("div",{className:"border-t border-slate-200 dark:border-slate-700 px-4 py-3 text-center text-xs text-slate-400"},
           "Nenhum evento nesta semana. ",
-          totalEvents>0&&/*#__PURE__*/React.createElement("span",null,"Ha ",Math.floor(totalEvents/2)," licitacao(oes) com datas em outras semanas — use < Anterior ou Proximo >.")
+          totalFavEvents>0&&/*#__PURE__*/React.createElement("span",null,"Ha ",Math.floor(totalFavEvents/2)," licitacao(oes) com datas em outras semanas.")
         )
       ),
 
@@ -3375,8 +3459,15 @@ const CalendarioLicitacoes = () => {
               selected.tipo==='participacao'?'Data de Participacao':'Prazo Questionamento (-3 dias)'),
             selected.item.sistema&&/*#__PURE__*/React.createElement("span",{className:"px-2 py-0.5 rounded-full text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"},selected.item.sistema)
           ),
-          /*#__PURE__*/React.createElement("button",{onClick:()=>setSelected(null),className:"p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 shrink-0"},
-            /*#__PURE__*/React.createElement(Icon,{name:"x",className:"h-4 w-4"}))
+          /*#__PURE__*/React.createElement("div",{className:"flex items-center gap-2 shrink-0"},
+            /*#__PURE__*/React.createElement("button",{
+              onClick:()=>toggleGono(selected.item.id),
+              title:gono[selected.item.id]?'Marcar como No-Go':'Marcar como Go',
+              className:`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors${gono[selected.item.id]?' bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300':' border-slate-200 dark:border-slate-700 text-slate-400 hover:border-green-300 hover:text-green-600'}`
+            },gono[selected.item.id]?'🎯 Go':'No-Go'),
+            /*#__PURE__*/React.createElement("button",{onClick:()=>setSelected(null),className:"p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"},
+              /*#__PURE__*/React.createElement(Icon,{name:"x",className:"h-4 w-4"}))
+          )
         ),
         /*#__PURE__*/React.createElement("h3",{className:"text-base font-bold text-slate-700 dark:text-slate-200 mb-0.5 leading-snug"},selected.item.orgaoEntidade?.razaoSocial||'Orgao nao identificado'),
         /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-500 dark:text-slate-400 mb-2 leading-snug"},selected.item.objetoCompra||'Sem objeto'),
@@ -3390,26 +3481,28 @@ const CalendarioLicitacoes = () => {
           selected.item.situacao&&/*#__PURE__*/React.createElement("span",null,"| ",selected.item.situacao),
           selected.item.dataFimRecebimento&&/*#__PURE__*/React.createElement("span",null,"| Sessao: ",selected.item.dataFimRecebimento)
         ),
+        /*#__PURE__*/React.createElement("div",{className:"mb-4"},
+          /*#__PURE__*/React.createElement("label",{className:"block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1"},"Anotacoes"),
+          /*#__PURE__*/React.createElement("textarea",{
+            value:editingNote,
+            onChange:e=>setEditingNote(e.target.value),
+            onBlur:()=>saveNote(selected.item.id, editingNote),
+            rows:3,
+            placeholder:"Estrategia, contatos, observacoes...",
+            className:"w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+          })
+        ),
         /*#__PURE__*/React.createElement("div",{className:"flex gap-2 flex-wrap"},
-          /*#__PURE__*/React.createElement("button",{
-            onClick:gotoFavoritos,
-            className:"px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors"
-          },"Ver em Favoritos"),
-          selected.item.linkSistemaOrigem&&/*#__PURE__*/React.createElement("a",{
-            href:selected.item.linkSistemaOrigem,target:"_blank",rel:"noopener noreferrer",
-            className:"px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-          },"Abrir no PNCP"),
-          /*#__PURE__*/React.createElement("button",{
-            onClick:()=>removeFav(selected.item.id),
-            className:"px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          },"Remover dos Favoritos")
+          /*#__PURE__*/React.createElement("button",{onClick:gotoFavoritos,className:"px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors"},"Ver em Favoritos"),
+          selected.item.linkSistemaOrigem&&/*#__PURE__*/React.createElement("a",{href:selected.item.linkSistemaOrigem,target:"_blank",rel:"noopener noreferrer",className:"px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"},"Abrir no PNCP"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>removeFav(selected.item.id),className:"px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"},"Remover dos Favoritos")
         )
       ),
 
       favCount===0&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-12 flex flex-col items-center gap-3 text-center"},
         /*#__PURE__*/React.createElement(Icon,{name:"star",className:"h-10 w-10 text-slate-300 dark:text-slate-600"}),
         /*#__PURE__*/React.createElement("p",{className:"text-sm font-semibold text-slate-600 dark:text-slate-400"},"Nenhum favorito ainda"),
-        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 max-w-xs"},"Favorita editais na aba Busca de Editais. O calendario mostra automaticamente a data de participacao e o prazo de questionamento (3 dias antes) de cada licitacao favorita.")
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 max-w-xs"},"Favorita editais na aba Busca de Editais. O calendario mostra a data de participacao e o prazo de questionamento (3 dias antes) de cada licitacao favorita.")
       )
 
     )
