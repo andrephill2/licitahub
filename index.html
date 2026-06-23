@@ -3204,60 +3204,88 @@ const RadarMercado = () => {
   const [step, setStep] = useState('');
   const [concorrentes, setConcorrentes] = useState([]);
   const [benchmark, setBenchmark] = useState(null);
-  const [editaisAnalisados, setEditaisAnalisados] = useState(0);
-  const [totalItens, setTotalItens] = useState(0);
+  const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
   const {toast} = useToast();
 
+  const fetchT = (url, ms = 8000) => {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, {signal: ctrl.signal})
+      .finally(() => clearTimeout(id))
+      .then(r => r.ok ? r.json() : [])
+      .catch(() => []);
+  };
+
   const buscar = async () => {
     if (!query.trim()) return;
-    setLoading(true); setError(null); setConcorrentes([]); setBenchmark(null); setEditaisAnalisados(0); setTotalItens(0);
+    setLoading(true); setError(null); setConcorrentes([]); setBenchmark(null); setMeta(null);
     try {
-      setStep('Buscando pregoes recentes no PNCP...');
-      const editais = await searchPNCP(query, 1, false, 'edital');
+      setStep('Buscando pregoes no PNCP...');
+
+      let editais = [];
+      try {
+        editais = await Promise.race([
+          searchPNCP(query, 1, false, 'edital'),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout_search')), 12000))
+        ]);
+      } catch(e) {
+        throw new Error(e.message === 'timeout_search'
+          ? 'A busca no PNCP demorou demais. Verifique sua conexao e tente novamente.'
+          : e.message);
+      }
+
       if (!editais || editais.length === 0) {
-        setError('Nenhum pregao encontrado para esse termo. Tente palavras diferentes ou verifique a ortografia.');
+        setError('Nenhum pregao encontrado para esse termo. Tente palavras diferentes.');
         setLoading(false); setStep(''); return;
       }
+
       const top = editais.map(e => {
         const raw = e.id.replace(/^pncp-/, '');
         const m = raw.match(/^(\d{14})-(\d{4})-(\d+)$/);
-        if (!m) return null;
-        return {cnpj: m[1], ano: m[2], seq: m[3]};
-      }).filter(Boolean).slice(0, 6);
+        return m ? {cnpj: m[1], ano: m[2], seq: parseInt(m[3], 10)} : null;
+      }).filter(Boolean).slice(0, 4);
+
       if (top.length === 0) {
-        setError('Nao foi possivel extrair dados dos pregoes encontrados. Tente outro termo.');
+        setError('Pregoes encontrados mas sem dados de orgao suficientes para buscar vencedores. Tente outro termo.');
         setLoading(false); setStep(''); return;
       }
-      setStep(`Analisando ${top.length} pregoes - buscando itens...`);
-      const itemsResults = await Promise.allSettled(
-        top.map(e =>
-          fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens?pagina=1&tamanhoPagina=10`)
-            .then(r => r.ok ? r.json() : []).catch(() => [])
-        )
+
+      setStep(`Buscando itens de ${top.length} pregoes...`);
+
+      const itemsPerEdital = await Promise.allSettled(
+        top.map(e => fetchT(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens?pagina=1&tamanhoPagina=10`))
       );
-      const allResultPromises = [];
+
+      const resultPromises = [];
+      let totalComResultado = 0;
       top.forEach((e, i) => {
-        const raw = itemsResults[i].status === 'fulfilled' ? itemsResults[i].value : [];
-        const itemList = Array.isArray(raw) ? raw : (raw.data || []);
-        itemList.slice(0, 6).forEach(item => {
-          const num = item.numeroItem || item.numero || item.id;
+        const raw = itemsPerEdital[i].status === 'fulfilled' ? itemsPerEdital[i].value : [];
+        const lista = Array.isArray(raw) ? raw : [];
+        const comResultado = lista.filter(it => it.temResultado === true).slice(0, 5);
+        totalComResultado += comResultado.length;
+        comResultado.forEach(it => {
+          const num = it.numeroItem;
           if (!num) return;
-          allResultPromises.push(
-            fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens/${num}/resultados?pagina=1&tamanhoPagina=5`)
-              .then(r => r.ok ? r.json() : []).catch(() => [])
+          resultPromises.push(
+            fetchT(`https://pncp.gov.br/api/pncp/v1/orgaos/${e.cnpj}/compras/${e.ano}/${e.seq}/itens/${num}/resultados?pagina=1&tamanhoPagina=5`)
           );
         });
       });
-      setStep(`Buscando vencedores de ${allResultPromises.length} itens...`);
-      const allResults = await Promise.allSettled(allResultPromises);
+
+      if (resultPromises.length === 0) {
+        setError(`Nenhum item homologado encontrado nos ${top.length} pregoes analisados. Os resultados ainda podem estar sendo publicados no PNCP.`);
+        setLoading(false); setStep(''); return;
+      }
+
+      setStep(`Buscando vencedores de ${resultPromises.length} itens homologados...`);
+      const allResults = await Promise.allSettled(resultPromises);
+
       const map = {};
       const precos = [];
-      let itensComResultado = 0;
       allResults.forEach(res => {
         if (res.status !== 'fulfilled') return;
-        const lista = Array.isArray(res.value) ? res.value : (res.value?.data || []);
-        if (lista.length > 0) itensComResultado++;
+        const lista = Array.isArray(res.value) ? res.value : [];
         lista.forEach(r => {
           const cnpj = r.niFornecedor || '';
           const nome = r.nomeRazaoSocialFornecedor || '';
@@ -3274,14 +3302,25 @@ const RadarMercado = () => {
           }
         });
       });
+
       const sorted = Object.values(map).sort((a,b) => b.totalItens - a.totalItens).slice(0, 25);
       sorted.forEach(c => { if (c.menorPreco === Infinity) c.menorPreco = 0; });
-      if (precos.length > 0) setBenchmark({min: Math.min(...precos), max: Math.max(...precos), media: precos.reduce((a,b)=>a+b,0)/precos.length, amostras: precos.length});
+
+      if (precos.length > 0) setBenchmark({
+        min: Math.min(...precos), max: Math.max(...precos),
+        media: precos.reduce((a,b) => a+b, 0) / precos.length,
+        amostras: precos.length
+      });
+
       setConcorrentes(sorted);
-      setEditaisAnalisados(top.length);
-      setTotalItens(itensComResultado);
-      if (sorted.length === 0) setError(`Nenhum vencedor identificado nos ${top.length} pregoes analisados. Os resultados podem nao ter sido publicados ainda no PNCP, ou o pregao ainda esta em andamento.`);
-    } catch(e) { setError(e.message || 'Erro ao buscar dados'); }
+      setMeta({editais: top.length, itens: resultPromises.length});
+
+      if (sorted.length === 0) {
+        setError(`${resultPromises.length} itens consultados mas nenhum vencedor com CNPJ identificado. Tente um termo mais especifico.`);
+      }
+    } catch(e) {
+      setError(e.message || 'Erro inesperado ao buscar dados');
+    }
     setLoading(false); setStep('');
   };
 
@@ -3291,21 +3330,22 @@ const RadarMercado = () => {
         /*#__PURE__*/React.createElement("h2",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-2"},
           /*#__PURE__*/React.createElement(Icon,{name:"trending",className:"h-4 w-4 text-indigo-500"}),
           "Radar de Mercado"),
-        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},"Descubra quem venceu pregoes similares ao seu e a que preco. Busca nos editais mais recentes do PNCP e retorna os vencedores de cada item."),
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},"Busca nos editais mais recentes do PNCP e retorna as empresas que venceram itens similares, com benchmark de preco unitario homologado."),
         /*#__PURE__*/React.createElement("div",{className:"flex gap-2"},
-          /*#__PURE__*/React.createElement("input",{type:"text",value:query,onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&buscar(),placeholder:"Ex: digitalizacao de documentos, gestao documental, guarda de documentos...",className:"flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"}),
+          /*#__PURE__*/React.createElement("input",{type:"text",value:query,onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&buscar(),placeholder:"Ex: digitalizacao, gestao documental, guarda de documentos...",className:"flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"}),
           /*#__PURE__*/React.createElement("button",{onClick:buscar,disabled:loading||!query.trim(),className:"px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"},loading?'Buscando...':'Buscar')
         )
       ),
       loading&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-10 flex flex-col items-center gap-3"},
         /*#__PURE__*/React.createElement("div",{className:"animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"}),
-        /*#__PURE__*/React.createElement("p",{className:"text-sm text-slate-500"},step||'Consultando PNCP...')
+        /*#__PURE__*/React.createElement("p",{className:"text-sm text-slate-500 text-center"},step||'Consultando PNCP...'),
+        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 text-center"},"Pode levar ate 15 segundos dependendo do PNCP")
       ),
-      error&&/*#__PURE__*/React.createElement("div",{className:"bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-red-700 dark:text-red-400 text-sm"},error),
+      !loading&&error&&/*#__PURE__*/React.createElement("div",{className:"bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-red-700 dark:text-red-400 text-sm"},error),
       !loading&&benchmark&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
         /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-2"},
           /*#__PURE__*/React.createElement(Icon,{name:"zap",className:"h-4 w-4 text-green-500"}),"Benchmark de Preco"),
-        /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},benchmark.amostras," amostras de preco unitario homologado em ",editaisAnalisados," pregoes (",totalItens," itens com resultado)"),
+        meta&&/*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-3"},benchmark.amostras," amostras | ",meta.editais," pregoes | ",meta.itens," itens com resultado"),
         /*#__PURE__*/React.createElement("div",{className:"grid grid-cols-3 gap-3"},
           /*#__PURE__*/React.createElement("div",{className:"text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-xl"},
             /*#__PURE__*/React.createElement("p",{className:"text-xs text-slate-400 mb-1"},"Minimo"),
@@ -3320,7 +3360,7 @@ const RadarMercado = () => {
       ),
       !loading&&concorrentes.length>0&&/*#__PURE__*/React.createElement("div",{className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5"},
         /*#__PURE__*/React.createElement("h3",{className:"text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"},
-          /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4 text-indigo-500"}),"Concorrentes detectados - ",concorrentes.length," empresa(s) em ",editaisAnalisados," pregoes analisados"),
+          /*#__PURE__*/React.createElement(Icon,{name:"building",className:"h-4 w-4 text-indigo-500"}),"Concorrentes - ",concorrentes.length," empresa(s) identificada(s)"),
         /*#__PURE__*/React.createElement("div",{className:"space-y-2"},
           concorrentes.map((comp,i)=>/*#__PURE__*/React.createElement("div",{key:i,className:"flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"},
             /*#__PURE__*/React.createElement("span",{className:"text-xs font-bold text-slate-400 w-5 shrink-0 text-right mt-0.5"},i+1),
@@ -3339,7 +3379,6 @@ const RadarMercado = () => {
     )
   );
 };
-
 
 const Dashboard = ({
 
