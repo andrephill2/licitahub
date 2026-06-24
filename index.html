@@ -3514,11 +3514,17 @@ const PainelAcompanhamento = () => {
   const [statuses, setStatuses] = useState(() => { try { return JSON.parse(localStorage.getItem('lh-painel-statuses') || '{}'); } catch { return {}; } });
   const [copied, setCopied] = useState(false);
   const [posEdit, setPosEdit] = useState({});
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     const sync = () => { try { setFavorites(JSON.parse(localStorage.getItem('licitahub-favorites') || '{}')); } catch {} };
     window.addEventListener('lh:favoritesChanged', sync);
     return () => window.removeEventListener('lh:favoritesChanged', sync);
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
   }, []);
 
   const saveStatus = (id, field, value) => {
@@ -3538,9 +3544,48 @@ const PainelAcompanhamento = () => {
   const fmtDate = d => !d ? '—' : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
   const toKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
+  const countdown = (target, base) => {
+    if (!target) return null;
+    const diff = target - base;
+    if (diff <= 0) return 'Encerrado';
+    const mins = Math.floor(diff / 60000);
+    const d = Math.floor(mins / 1440);
+    const h = Math.floor((mins % 1440) / 60);
+    const m = mins % 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}min`;
+    return `${m}min`;
+  };
+
   const today = new Date(); today.setHours(0,0,0,0);
   const todayKey = toKey(today);
   const todayFmt = fmtDate(today);
+
+  const PRE_FASES = [
+    {key:'analise_participacao', label:'An. Participação', short:'An. Part.'},
+    {key:'analise_tecnica', label:'An. Técnica', short:'An. Téc.'},
+    {key:'cadastro_proposta', label:'Cadastro Proposta', short:'Cad. Prop.'},
+    {key:'lance', label:'Dia do Lance', short:'Lance'},
+  ];
+  const POS_FASES = [
+    {key:'recurso', label:'Recurso', short:'Recurso'},
+    {key:'contrarrazao', label:'Contrarrazão', short:'Contrarr.'},
+    {key:'adjudicado', label:'Adjudicado', short:'Adjudicado'},
+    {key:'homologado', label:'Homologado', short:'Homologado'},
+  ];
+  const FASE_LABELS = {};
+  [...PRE_FASES, ...POS_FASES].forEach(f => { FASE_LABELS[f.key] = f.label; });
+  const FASE_COLORS = {
+    analise_participacao: 'bg-sky-500 text-white border-sky-500',
+    analise_tecnica:      'bg-indigo-500 text-white border-indigo-500',
+    cadastro_proposta:    'bg-violet-500 text-white border-violet-500',
+    lance:                'bg-blue-600 text-white border-blue-600',
+    recurso:              'bg-orange-500 text-white border-orange-500',
+    contrarrazao:         'bg-purple-500 text-white border-purple-500',
+    adjudicado:           'bg-green-600 text-white border-green-600',
+    homologado:           'bg-emerald-600 text-white border-emerald-600',
+  };
+  const IDLE = 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800';
 
   const favItems = Object.values(favorites);
   const itemsWithDates = favItems.map(item => {
@@ -3550,8 +3595,9 @@ const PainelAcompanhamento = () => {
   });
 
   const todayAlerts = itemsWithDates.filter(({item, certame, esc}) => {
-    const fase = (statuses[item.id] || {}).fase;
-    if (['adjudicado','homologado','suspenso','declinei'].includes(fase)) return false;
+    const st = statuses[item.id] || {};
+    if (st.gonogo === 'nogo') return false;
+    if (['adjudicado','homologado'].includes(st.fase)) return false;
     return (certame && toKey(certame) === todayKey) || (esc && toKey(esc) === todayKey);
   });
 
@@ -3565,36 +3611,138 @@ const PainelAcompanhamento = () => {
       t += `   Objeto: ${item.objetoCompra || 'Sem título'}\n`;
       t += `   Órgão: ${(item.orgaoEntidade && item.orgaoEntidade.razaoSocial) || '—'}\n`;
       t += `   Certame: ${fmtDate(certame)}\n`;
-      if (st.gonogo) t += `   Decisão: ${st.gonogo === 'go' ? 'GO' : 'NO-GO'}\n`;
+      if (st.gonogo === 'go') t += `   Decisão: GO\n`;
+      if (st.fase) t += `   Fase: ${FASE_LABELS[st.fase] || st.fase}\n`;
       if (st.posicionamento) t += `   Posicionamento: ${st.posicionamento}\n`;
       if (item.linkSistemaOrigem) t += `   Link: ${item.linkSistemaOrigem}\n`;
     });
     navigator.clipboard.writeText(t).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }).catch(() => {});
   };
 
-  const FASE_ACTIVE = {
-    lance: 'bg-blue-500 text-white border-blue-500',
-    recurso: 'bg-orange-500 text-white border-orange-500',
-    contrarrazao: 'bg-purple-500 text-white border-purple-500',
-    adjudicado: 'bg-green-600 text-white border-green-600',
-    homologado: 'bg-emerald-600 text-white border-emerald-600',
-    suspenso: 'bg-yellow-500 text-white border-yellow-500',
-    declinei: 'bg-red-500 text-white border-red-500',
-  };
-  const FASE_IDLE = 'border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800';
-  const thCls = 'px-3 py-3 text-left font-bold text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 whitespace-nowrap';
-  const tdCls = 'px-3 py-2.5 text-center align-middle';
+  const CardItem = ({item, certame, esc}) => {
+    const st = statuses[item.id] || {};
+    const gonogo = st.gonogo;
+    const fase = st.fase;
+    const isNgo = gonogo === 'nogo';
+    const isTodayCert = certame && toKey(certame) === todayKey;
+    const isTodayEsc = esc && toKey(esc) === todayKey;
 
-  const FaseBtn = (id, key) => {
-    const active = (statuses[id] || {}).fase === key;
-    return /*#__PURE__*/React.createElement("button", {
-      onClick: () => toggleFase(id, key),
-      className: `w-7 h-6 rounded-md border text-[11px] font-bold transition-all ${active ? FASE_ACTIVE[key] : FASE_IDLE}`
-    }, active ? '✓' : '○');
+    const lanceCD = countdown(certame, now);
+    const propostaDeadline = st.dataPropostaDeadline ? new Date(st.dataPropostaDeadline) : null;
+    const propostaCD = propostaDeadline ? countdown(propostaDeadline, now) : null;
+    const propostaExpired = propostaDeadline && propostaDeadline <= now;
+
+    let borderCls = 'border-slate-200/60 dark:border-slate-800/60';
+    if (isNgo) borderCls = 'border-red-300 dark:border-red-800/60';
+    else if (fase === 'homologado') borderCls = 'border-emerald-400 dark:border-emerald-700/60';
+    else if (fase === 'adjudicado') borderCls = 'border-green-400 dark:border-green-700/60';
+    else if (gonogo === 'go') borderCls = 'border-indigo-300 dark:border-indigo-700/60';
+    else if (isTodayCert || isTodayEsc) borderCls = 'border-amber-300 dark:border-amber-700/60';
+
+    const FaseBtn = (key, label) => {
+      const active = fase === key;
+      return /*#__PURE__*/React.createElement("button", {
+        key,
+        onClick: () => toggleFase(item.id, key),
+        title: label,
+        className: `px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-all whitespace-nowrap ${active ? FASE_COLORS[key] + ' shadow-sm' : IDLE}`
+      }, label);
+    };
+
+    return /*#__PURE__*/React.createElement("div", {className:`bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-sm border-2 ${borderCls} flex flex-col overflow-hidden transition-all`},
+
+      /*#__PURE__*/React.createElement("div", {className:`px-4 pt-3.5 pb-2.5 ${isNgo ? 'bg-red-50/50 dark:bg-red-950/20' : fase === 'homologado' ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : ''}`},
+        /*#__PURE__*/React.createElement("div", {className:"flex items-start justify-between gap-2 mb-1.5"},
+          /*#__PURE__*/React.createElement("div", {className:"flex flex-wrap gap-1 items-center"},
+            gonogo === 'go'   && /*#__PURE__*/React.createElement("span", {className:"px-2 py-0.5 rounded-md text-[9px] font-black bg-green-500 text-white uppercase tracking-wide"}, "GO"),
+            gonogo === 'nogo' && /*#__PURE__*/React.createElement("span", {className:"px-2 py-0.5 rounded-md text-[9px] font-black bg-red-500 text-white uppercase tracking-wide"}, "NO-GO"),
+            fase && /*#__PURE__*/React.createElement("span", {className:`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${FASE_COLORS[fase] || 'bg-slate-200 text-slate-600'}`}, FASE_LABELS[fase] || fase),
+            (isTodayCert || isTodayEsc) && !isNgo && /*#__PURE__*/React.createElement("span", {className:"px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-400 text-white uppercase tracking-wide animate-pulse"}, isTodayCert ? "Pregão Hoje!" : "Esclarec. Hoje")
+          ),
+          item.linkSistemaOrigem && /*#__PURE__*/React.createElement("a", {href:item.linkSistemaOrigem, target:"_blank", rel:"noopener noreferrer", className:"flex-shrink-0 text-[9px] font-bold text-indigo-500 hover:text-indigo-700 transition-colors mt-0.5"}, "ABRIR ↗")
+        ),
+        /*#__PURE__*/React.createElement("p", {
+          className:"text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-snug",
+          style:{display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'},
+          title:item.objetoCompra
+        }, item.objetoCompra || 'Sem título'),
+        /*#__PURE__*/React.createElement("p", {className:"text-[10px] text-slate-400 truncate mt-0.5"},
+          ((item.orgaoEntidade && item.orgaoEntidade.razaoSocial) || '—') + (item.uf ? ` • ${item.uf}` : ''))
+      ),
+
+      /*#__PURE__*/React.createElement("div", {className:"flex border-t border-b border-slate-100 dark:border-slate-800 divide-x divide-slate-100 dark:divide-slate-800"},
+        /*#__PURE__*/React.createElement("div", {className:"flex-1 px-3 py-2 text-center min-w-0"},
+          /*#__PURE__*/React.createElement("p", {className:"text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-0.5"}, "Certame / Lance"),
+          /*#__PURE__*/React.createElement("p", {className:`text-xs font-bold ${isTodayCert ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}, fmtDate(certame)),
+          lanceCD && /*#__PURE__*/React.createElement("p", {className:`text-[10px] font-semibold mt-0.5 ${lanceCD === 'Encerrado' ? 'text-slate-400' : 'text-indigo-600 dark:text-indigo-400'}`},
+            lanceCD === 'Encerrado' ? 'Encerrado' : `em ${lanceCD}`)
+        ),
+        /*#__PURE__*/React.createElement("div", {className:"flex-1 px-3 py-2 text-center min-w-0"},
+          /*#__PURE__*/React.createElement("p", {className:"text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-0.5"}, "Prazo Proposta"),
+          propostaDeadline
+            ? /*#__PURE__*/React.createElement(React.Fragment, null,
+                /*#__PURE__*/React.createElement("p", {className:`text-xs font-bold ${propostaExpired ? 'text-slate-400' : 'text-violet-600 dark:text-violet-400'}`},
+                  `${String(propostaDeadline.getDate()).padStart(2,'0')}/${String(propostaDeadline.getMonth()+1).padStart(2,'0')} ${String(propostaDeadline.getHours()).padStart(2,'0')}h${String(propostaDeadline.getMinutes()).padStart(2,'0')}`),
+                /*#__PURE__*/React.createElement("p", {className:`text-[10px] font-semibold mt-0.5 ${propostaExpired ? 'text-slate-400' : 'text-violet-500'}`},
+                  propostaExpired ? 'Encerrado' : `em ${propostaCD}`),
+                /*#__PURE__*/React.createElement("button", {
+                  onClick: () => saveStatus(item.id,'dataPropostaDeadline', null),
+                  className:"text-[8px] text-slate-300 hover:text-red-400 transition-colors mt-0.5"
+                }, "✕ limpar")
+              )
+            : /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("p", {className:"text-[10px] text-slate-400 mb-0.5"}, "Definir prazo:"),
+                /*#__PURE__*/React.createElement("input", {
+                  type:"datetime-local",
+                  onChange: e => { if(e.target.value) saveStatus(item.id,'dataPropostaDeadline', e.target.value); },
+                  className:"w-full text-[9px] text-slate-500 dark:text-slate-400 bg-transparent focus:outline-none cursor-pointer text-center border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5"
+                })
+              )
+        )
+      ),
+
+      /*#__PURE__*/React.createElement("div", {className:"px-4 py-3 space-y-2.5 flex-1"},
+
+        /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2"},
+          /*#__PURE__*/React.createElement("span", {className:"text-[9px] font-bold uppercase tracking-widest text-slate-400 w-14 flex-shrink-0"}, "Decisão"),
+          /*#__PURE__*/React.createElement("div", {className:"flex gap-1"},
+            /*#__PURE__*/React.createElement("button", {onClick:()=>saveStatus(item.id,'gonogo',gonogo==='go'?null:'go'), className:`px-3 py-0.5 rounded-lg border text-[10px] font-bold transition-all ${gonogo==='go'?'bg-green-500 text-white border-green-500':IDLE}`}, "GO"),
+            /*#__PURE__*/React.createElement("button", {onClick:()=>saveStatus(item.id,'gonogo',gonogo==='nogo'?null:'nogo'), className:`px-3 py-0.5 rounded-lg border text-[10px] font-bold transition-all ${gonogo==='nogo'?'bg-red-500 text-white border-red-500':IDLE}`}, "NO-GO")
+          )
+        ),
+
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("p", {className:"text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1"}, "Pré-Pregão"),
+          /*#__PURE__*/React.createElement("div", {className:"flex flex-wrap gap-1"},
+            PRE_FASES.map(f => FaseBtn(f.key, f.short))
+          )
+        ),
+
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("p", {className:"text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1"}, "Pós-Pregão"),
+          /*#__PURE__*/React.createElement("div", {className:"flex flex-wrap gap-1"},
+            POS_FASES.map(f => FaseBtn(f.key, f.short))
+          )
+        ),
+
+        /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2"},
+          /*#__PURE__*/React.createElement("span", {className:"text-[9px] font-bold uppercase tracking-widest text-slate-400 w-14 flex-shrink-0"}, "Posição"),
+          /*#__PURE__*/React.createElement("input", {
+            type:"text",
+            value: posEdit[item.id] !== undefined ? posEdit[item.id] : (st.posicionamento || ''),
+            onChange: e => setPosEdit(p => ({...p, [item.id]: e.target.value})),
+            onBlur: e => { saveStatus(item.id,'posicionamento',e.target.value); setPosEdit(p => { const n={...p}; delete n[item.id]; return n; }); },
+            placeholder: "1°, 2°, ...",
+            className: "flex-1 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 dark:text-slate-300 placeholder:text-slate-300"
+          })
+        )
+      )
+    );
   };
 
   return /*#__PURE__*/React.createElement("div", {className:"flex-1 overflow-auto"},
     /*#__PURE__*/React.createElement("div", {className:"max-w-[98%] mx-auto px-4 py-6 space-y-5"},
+
       /*#__PURE__*/React.createElement("div", {className:"bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-lg border border-slate-200/50 dark:border-slate-800/50 overflow-hidden"},
         /*#__PURE__*/React.createElement("div", {className:"flex items-center justify-between px-5 py-3.5 bg-gradient-to-r from-indigo-50 to-sky-50 dark:from-indigo-950/30 dark:to-sky-950/30 border-b border-slate-200/50 dark:border-slate-800/50"},
           /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2.5"},
@@ -3619,82 +3767,27 @@ const PainelAcompanhamento = () => {
                   /*#__PURE__*/React.createElement("div", {className:"flex-1 min-w-0"},
                     /*#__PURE__*/React.createElement("p", {className:"text-sm font-semibold text-slate-800 dark:text-slate-200 truncate"}, item.objetoCompra || 'Sem título'),
                     /*#__PURE__*/React.createElement("p", {className:"text-xs text-slate-500 truncate"}, ((item.orgaoEntidade && item.orgaoEntidade.razaoSocial) || '—') + (item.uf ? ` • ${item.uf}` : '')),
-                    /*#__PURE__*/React.createElement("p", {className:"text-[11px] text-slate-400 mt-0.5"}, isCert ? `Certame: ${fmtDate(certame)}` : `Fim Esclarecimento: ${fmtDate(esc)} | Certame: ${fmtDate(certame)}`)
+                    /*#__PURE__*/React.createElement("p", {className:"text-[11px] text-slate-400 mt-0.5"}, isCert ? `Certame: ${fmtDate(certame)}` : `Fim Esclarec.: ${fmtDate(esc)} | Certame: ${fmtDate(certame)}`)
                   )
                 );
               })
             )
       ),
-      /*#__PURE__*/React.createElement("div", {className:"bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-lg border border-slate-200/50 dark:border-slate-800/50 overflow-hidden"},
-        /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-200/50 dark:border-slate-800/50"},
+
+      /*#__PURE__*/React.createElement("div", {className:"space-y-3"},
+        /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2"},
           /*#__PURE__*/React.createElement(Icon, {name:"target", className:"h-4 w-4 text-indigo-500"}),
-          /*#__PURE__*/React.createElement("span", {className:"text-sm font-bold text-slate-800 dark:text-slate-200"}, "Painel de Acompanhamento"),
-          favItems.length > 0 && /*#__PURE__*/React.createElement("span", {className:"ml-auto text-[11px] text-slate-400"}, `${favItems.length} licitação(ões)`)
+          /*#__PURE__*/React.createElement("span", {className:"text-sm font-bold text-slate-700 dark:text-slate-200"}, "Painel de Acompanhamento"),
+          favItems.length > 0 && /*#__PURE__*/React.createElement("span", {className:"text-[11px] text-slate-400"}, `${favItems.length} licitação(ões)`)
         ),
         favItems.length === 0
-          ? /*#__PURE__*/React.createElement("div", {className:"px-5 py-12 text-center"},
+          ? /*#__PURE__*/React.createElement("div", {className:"bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 px-5 py-12 text-center"},
               /*#__PURE__*/React.createElement("p", {className:"text-sm font-semibold text-slate-500"}, "Nenhuma licitação favoritada"),
               /*#__PURE__*/React.createElement("p", {className:"text-xs text-slate-400 mt-1"}, "Adicione licitações na aba Busca de Editais.")
             )
-          : /*#__PURE__*/React.createElement("div", {className:"overflow-x-auto"},
-              /*#__PURE__*/React.createElement("table", {className:"w-full border-collapse text-xs"},
-                /*#__PURE__*/React.createElement("thead", null,
-                  /*#__PURE__*/React.createElement("tr", null,
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} min-w-[220px] text-left`}, "Licitação"),
-                    /*#__PURE__*/React.createElement("th", {className:thCls}, "Certame"),
-                    /*#__PURE__*/React.createElement("th", {className:thCls}, "Fim Esclarec."),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Go/No-Go"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Lance"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} min-w-[100px]`}, "Posicionamento"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Recurso"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Contrarrazão"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Adjudicado"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Homologado"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Suspenso"),
-                    /*#__PURE__*/React.createElement("th", {className:`${thCls} text-center`}, "Declinei")
-                  )
-                ),
-                /*#__PURE__*/React.createElement("tbody", null,
-                  itemsWithDates.map(({item, certame, esc}, idx) => {
-                    const st = statuses[item.id] || {};
-                    const gonogo = st.gonogo;
-                    const isTodayCert = certame && toKey(certame) === todayKey;
-                    const rowCls = `border-t border-slate-100 dark:border-slate-800 ${idx%2===0?'':'bg-slate-50/40 dark:bg-slate-800/10'}${isTodayCert?' !bg-indigo-50/60 dark:!bg-indigo-950/20':''}`;
-                    return /*#__PURE__*/React.createElement("tr", {key:item.id, className:rowCls},
-                      /*#__PURE__*/React.createElement("td", {className:"px-4 py-2.5"},
-                        /*#__PURE__*/React.createElement("div", {className:"max-w-[230px]"},
-                          /*#__PURE__*/React.createElement("p", {className:"font-semibold text-slate-700 dark:text-slate-300 truncate", title:item.objetoCompra}, item.objetoCompra || 'Sem título'),
-                          /*#__PURE__*/React.createElement("p", {className:"text-slate-400 dark:text-slate-500 truncate text-[10px]", title:(item.orgaoEntidade&&item.orgaoEntidade.razaoSocial)||''}, (item.orgaoEntidade&&item.orgaoEntidade.razaoSocial)||'—')
-                        )
-                      ),
-                      /*#__PURE__*/React.createElement("td", {className:`${tdCls} whitespace-nowrap font-semibold ${isTodayCert?'text-indigo-600 dark:text-indigo-400':'text-slate-600 dark:text-slate-400'}`}, fmtDate(certame)),
-                      /*#__PURE__*/React.createElement("td", {className:`${tdCls} whitespace-nowrap text-slate-500 dark:text-slate-400`}, fmtDate(esc)),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls},
-                        /*#__PURE__*/React.createElement("div", {className:"flex items-center justify-center gap-1"},
-                          /*#__PURE__*/React.createElement("button", {onClick:()=>saveStatus(item.id,'gonogo',gonogo==='go'?null:'go'), className:`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all ${gonogo==='go'?'bg-green-500 text-white border-green-500':FASE_IDLE}`}, "GO"),
-                          /*#__PURE__*/React.createElement("button", {onClick:()=>saveStatus(item.id,'gonogo',gonogo==='nogo'?null:'nogo'), className:`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all ${gonogo==='nogo'?'bg-red-500 text-white border-red-500':FASE_IDLE}`}, "NGO")
-                        )
-                      ),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'lance')),
-                      /*#__PURE__*/React.createElement("td", {className:"px-3 py-2.5"},
-                        /*#__PURE__*/React.createElement("input", {
-                          type:"text",
-                          value: posEdit[item.id] !== undefined ? posEdit[item.id] : (st.posicionamento || ''),
-                          onChange: e => setPosEdit(p => ({...p, [item.id]: e.target.value})),
-                          onBlur: e => { saveStatus(item.id,'posicionamento',e.target.value); setPosEdit(p => { const n={...p}; delete n[item.id]; return n; }); },
-                          placeholder: "1°, 2°...",
-                          className: "w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 dark:text-slate-300 placeholder:text-slate-300"
-                        })
-                      ),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'recurso')),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'contrarrazao')),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'adjudicado')),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'homologado')),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'suspenso')),
-                      /*#__PURE__*/React.createElement("td", {className:tdCls}, FaseBtn(item.id,'declinei'))
-                    );
-                  })
-                )
+          : /*#__PURE__*/React.createElement("div", {className:"grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"},
+              itemsWithDates.map(({item, certame, esc}) =>
+                /*#__PURE__*/React.createElement(CardItem, {key:item.id, item, certame, esc})
               )
             )
       )
