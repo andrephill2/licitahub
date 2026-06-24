@@ -3533,7 +3533,6 @@ const PainelAcompanhamento = () => {
   const [copied, setCopied] = useState(false);
   const [posEdit, setPosEdit] = useState({});
   const [now, setNow] = useState(new Date());
-  const [expanded, setExpanded] = useState({});
   const [pncpCache, setPncpCache] = useState({});
   const fetchedRef = useRef(new Set());
 
@@ -3579,9 +3578,6 @@ const PainelAcompanhamento = () => {
       const favs = JSON.parse(localStorage.getItem('licitahub-favorites') || '{}');
       const items = Object.values(favs);
       if (items.length === 0) return;
-      const exp = {};
-      items.forEach(item => { exp[item.id] = true; });
-      setExpanded(exp);
       items.forEach(item => fetchPncp(item));
     } catch {}
   }, []);
@@ -3734,7 +3730,6 @@ const PainelAcompanhamento = () => {
                 const isNgo = gonogo === 'nogo';
                 const isTodayCert = certame && toKey(certame) === todayKey;
                 const isTodayEsc  = esc && toKey(esc) === todayKey;
-                const isOpen = !!expanded[item.id];
                 const cache = pncpCache[item.id];
                 const hasPncpIds = !!_getPncpIds(item);
                 const orgao = (item.orgaoEntidade && item.orgaoEntidade.razaoSocial) || '—';
@@ -3812,13 +3807,9 @@ const PainelAcompanhamento = () => {
                       /*#__PURE__*/React.createElement("span", {className:"text-[9px] font-bold uppercase text-slate-400"}, "Posição"),
                       /*#__PURE__*/React.createElement("input", {type:"text", value:posEdit[item.id]!==undefined?posEdit[item.id]:(st.posicionamento||''), onChange:e=>setPosEdit(p=>({...p,[item.id]:e.target.value})), onBlur:e=>{saveStatus(item.id,'posicionamento',e.target.value);setPosEdit(p=>{const n={...p};delete n[item.id];return n;});}, placeholder:"1°, 2°...", className:"w-20 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 dark:text-slate-300 placeholder:text-slate-300"})
                     ),
-                    (hasPncpIds || cache) && /*#__PURE__*/React.createElement("button", {
-                      onClick:()=>{ setExpanded(p=>({...p,[item.id]:!isOpen})); if(!isOpen && !cache) fetchPncp(item); },
-                      className:`ml-auto text-[9px] font-semibold transition-colors ${isOpen?'text-slate-400 hover:text-slate-600':'text-indigo-500 hover:text-indigo-700'}`
-                    }, isOpen ? '▲ recolher PNCP' : '▼ dados PNCP')
                   ),
 
-                  isOpen && /*#__PURE__*/React.createElement("div", {className:"border-t border-slate-200 dark:border-slate-800 px-4 py-4 bg-slate-50/80 dark:bg-slate-800/30"},
+                  (hasPncpIds || cache) && /*#__PURE__*/React.createElement("div", {className:"border-t border-slate-200 dark:border-slate-800 px-4 py-4 bg-slate-50/80 dark:bg-slate-800/30"},
                     !cache || cache.loading
                       ? /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2 py-3 justify-center"},
                           /*#__PURE__*/React.createElement("div", {className:"w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"}),
@@ -3843,7 +3834,7 @@ const PainelAcompanhamento = () => {
                                 InfoRow('Início propostas', fmtDateTime(cache.data.dataInicioRecebimentoPropostas)),
                                 InfoRow('Fim propostas', fmtDateTime(cache.data.dataEncerramentoProposta)),
                                 InfoRow('ID contratação PNCP', cache.data.numeroControlePNCP),
-                                InfoRow('Fonte', cache.data.nomePortal || (cache.data.orgaoEntidade && cache.data.orgaoEntidade.razaoSocial))
+                                InfoRow('Fonte', cache.data.nomePortal || (typeof cache.data.sistemaOrigem === 'string' ? cache.data.sistemaOrigem : null) || (cache.data.sistemaOrigem && (cache.data.sistemaOrigem.descricao || cache.data.sistemaOrigem.nome)) || (cache.data.linkSistemaOrigem && cache.data.linkSistemaOrigem.match(/licitacoes\.caixa\.gov|licitacoes-e\.bb|comprasnet|bll\.org\.br|bnc\.org\.br|licitacoese|portaldecompras/i) ? (cache.data.linkSistemaOrigem.match(/licitacoes-e\.bb|licitacoese/i) ? 'Licitações-E BB' : cache.data.linkSistemaOrigem.match(/comprasnet/i) ? 'ComprasNet' : cache.data.linkSistemaOrigem.match(/licitacoes\.caixa/i) ? 'Licitações Caixa' : cache.data.linkSistemaOrigem.match(/bll\.org\.br/i) ? 'BLL' : cache.data.linkSistemaOrigem.match(/bnc\.org\.br/i) ? 'BNC' : 'Portal de Compras') : null))
                               )
                             ),
                             cache.itens && cache.itens.length > 0 && /*#__PURE__*/React.createElement("div", null,
