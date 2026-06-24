@@ -3210,6 +3210,9 @@ const CalendarioLicitacoes = () => {
   const [customEvents, setCustomEvents] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lh-cal-custom') || '{}'); } catch { return {}; }
   });
+  const [statuses, setStatuses] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lh-painel-statuses') || '{}'); } catch { return {}; }
+  });
   const [weekOffset, setWeekOffset] = useState(0);
   const [selected, setSelected] = useState(null);
   const [editingNote, setEditingNote] = useState('');
@@ -3222,6 +3225,12 @@ const CalendarioLicitacoes = () => {
     };
     window.addEventListener('lh:favoritesChanged', sync);
     return () => window.removeEventListener('lh:favoritesChanged', sync);
+  }, []);
+
+  useEffect(() => {
+    const syncSt = () => { try { setStatuses(JSON.parse(localStorage.getItem('lh-painel-statuses') || '{}')); } catch {} };
+    window.addEventListener('lh:statusesChanged', syncSt);
+    return () => window.removeEventListener('lh:statusesChanged', syncSt);
   }, []);
 
   useEffect(() => {
@@ -3284,7 +3293,7 @@ const CalendarioLicitacoes = () => {
   const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
   const toKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
-  const buildEvents = (favs) => {
+  const buildEvents = (favs, sts) => {
     const ev = {};
     Object.values(favs).forEach(item => {
       const part = parseFimDate(item.dataFimRecebimento) || parseRawDate(item.rawDate);
@@ -3296,12 +3305,18 @@ const CalendarioLicitacoes = () => {
       const questKey = toKey(quest);
       if (!ev[questKey]) ev[questKey] = [];
       ev[questKey].push({item, tipo:'questionamento'});
+      if (sts) {
+        const st = sts[item.id] || {};
+        if (st.prazoRecurso && ['recurso','contrarrazao'].includes(st.fase)) {
+          try { const pd = new Date(st.prazoRecurso); if (!isNaN(pd.getTime())) { const pk = toKey(pd); if (!ev[pk]) ev[pk]=[]; ev[pk].push({item, tipo:'prazo_recurso', faseLabel:st.fase==='recurso'?'Recurso':'Contrarrazão', hora:String(pd.getHours()).padStart(2,'0')+':'+String(pd.getMinutes()).padStart(2,'0')}); } } catch {}
+        }
+      }
     });
     return ev;
   };
 
   const weekDays = getWeekDays(weekOffset);
-  const events = buildEvents(favorites);
+  const events = buildEvents(favorites, statuses);
   const todayD = new Date(); todayD.setHours(0,0,0,0);
   const DIAS = ['Seg','Ter','Qua','Qui','Sex','Sab','Dom'];
   const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -3393,19 +3408,19 @@ const CalendarioLicitacoes = () => {
               /*#__PURE__*/React.createElement("div",{className:"flex-1 space-y-1"},
                 dayEv.map((ev,j)=>{
                   const isSel = selected&&selected.item&&selected.item.id===ev.item.id&&selected.tipo===ev.tipo;
-                  const isP = ev.tipo==='participacao';
+                  const isP = ev.tipo==='participacao'; const isPR = ev.tipo==='prazo_recurso';
                   const isGo = gono[ev.item.id];
                   const orgao = ev.item.orgaoEntidade?.razaoSocial||'';
                   const portal = ev.item.sistema||ev.item.fonte||'';
                   return /*#__PURE__*/React.createElement("button",{
                     key:j,
                     onClick:()=>handleCardClick(ev),
-                    title:(isP?'Participacao: ':'Prazo quest.: ')+orgao,
-                    className:`w-full text-left p-1.5 rounded-lg text-xs font-medium transition-all shadow-sm cursor-pointer${isP?' bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800':' bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800'}${isSel?' ring-2 ring-offset-1 '+(isP?'ring-orange-400':'ring-red-400'):''}`
+                    title:(isP?'Participacao: ':isPR?('Prazo '+ev.faseLabel+': '):'Prazo quest.: ')+orgao,
+                    className:`w-full text-left p-1.5 rounded-lg text-xs font-medium transition-all shadow-sm cursor-pointer${isP?' bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800':isPR?' bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800':' bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800'}${isSel?' ring-2 ring-offset-1 '+(isP?'ring-orange-400':isPR?'ring-violet-400':'ring-red-400'):''}`
                   },
                     /*#__PURE__*/React.createElement("p",{className:"truncate font-bold leading-tight text-[10px] sm:text-xs"},isGo&&"🎯 ",orgao||'Orgao nao identificado'),
                     portal&&/*#__PURE__*/React.createElement("p",{className:"truncate opacity-80 mt-0.5 text-[9px] sm:text-[10px] font-medium"},portal),
-                    /*#__PURE__*/React.createElement("p",{className:"truncate opacity-60 mt-0.5 text-[9px] font-normal"},isP?'Participacao':'Prazo quest.')
+                    /*#__PURE__*/React.createElement("p",{className:"truncate opacity-60 mt-0.5 text-[9px] font-normal"},isP?'Participacao':isPR?('⚖️ '+ev.faseLabel):'Prazo quest.')
                   );
                 }),
                 dayCust.map((ce,j)=>
@@ -3588,7 +3603,7 @@ const PainelAcompanhamento = () => {
   const saveStatus = (id, field, value) => {
     const upd = {...statuses, [id]: {...(statuses[id] || {}), [field]: value}};
     setStatuses(upd);
-    localStorage.setItem('lh-painel-statuses', JSON.stringify(upd));
+    localStorage.setItem('lh-painel-statuses', JSON.stringify(upd)); window.dispatchEvent(new Event('lh:statusesChanged'));
   };
 
   const toggleFase = (id, key) => {
@@ -3708,9 +3723,10 @@ const PainelAcompanhamento = () => {
   const getDataHora = (item, certame) => { if (item.dataAberturaProposta) { try { const d = new Date(item.dataAberturaProposta); if (!isNaN(d.getTime())) return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} às ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } catch {} } return fmtDate(certame); };
   const getMesResumo = () => { const ms = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO']; const d = new Date(); return `${ms[d.getMonth()]}/${d.getFullYear()}`; };
 
-  const proximasParticipacoes = itemsWithDates.filter(({item,certame}) => { const st=statuses[item.id]||{}; return st.gonogo==='go' && !st.suspenso && !['adjudicado','homologado'].includes(st.fase) && certame && certame >= today; }).sort((a,b) => a.certame - b.certame);
+  const proximasParticipacoes = itemsWithDates.filter(({item,certame}) => { const st=statuses[item.id]||{}; return st.gonogo==='go' && !st.suspenso && !['adjudicado','homologado','recurso','contrarrazao'].includes(st.fase) && certame && certame >= today; }).sort((a,b) => a.certame - b.certame);
   const adjudicados = itemsWithDates.filter(({item}) => { const st=statuses[item.id]||{}; return ['adjudicado','homologado'].includes(st.fase); });
-  const posicionados = itemsWithDates.filter(({item}) => { const st=statuses[item.id]||{}; return !!(st.posicionamento) && !['adjudicado','homologado'].includes(st.fase) && !st.suspenso && st.gonogo!=='nogo'; });
+  const emRecurso = itemsWithDates.filter(({item}) => { const st=statuses[item.id]||{}; return ['recurso','contrarrazao'].includes(st.fase) && !st.suspenso && st.gonogo!=='nogo'; });
+  const posicionados = itemsWithDates.filter(({item}) => { const st=statuses[item.id]||{}; return !!(st.posicionamento) && !['adjudicado','homologado','recurso','contrarrazao'].includes(st.fase) && !st.suspenso && st.gonogo!=='nogo'; });
   const suspensos = itemsWithDates.filter(({item}) => !!(statuses[item.id]||{}).suspenso);
   const nogos = itemsWithDates.filter(({item}) => (statuses[item.id]||{}).gonogo==='nogo');
 
@@ -3739,8 +3755,12 @@ const PainelAcompanhamento = () => {
         const v=getValorFmt(item); if(v) t += `• Valor: ${v}\n`;
       });
     }
-    if (posicionados.length>0||suspensos.length>0||nogos.length>0) {
+    if (emRecurso.length>0||posicionados.length>0||suspensos.length>0||nogos.length>0) {
       t += `\n🔍 DEMAIS PROCESSOS ORGANIZADOS POR SITUAÇÃO\n`;
+      if (emRecurso.length>0) {
+        t += "\n⚖️ Status: EM RECURSO / CONTRARRAZÃO\n";
+        emRecurso.forEach(({item}) => { const st=statuses[item.id]||{}; const fase=st.fase==='recurso'?'Recurso':'Contrarrazão'; t += "• " + getOrgao(item) + " | Pregão: " + getNumPregao(item) + " | UASG: " + getUASG(item) + (st.posicionamento?" | "+st.posicionamento+" Lugar":"") + " | " + fase + "\n"; });
+      }
       if (posicionados.length>0) {
         t += `\n📍 Status: POSICIONADOS\n`;
         posicionados.forEach(({item}) => { const st=statuses[item.id]||{}; t += `• ${getOrgao(item)} | Pregão: ${getNumPregao(item)} | UASG: ${getUASG(item)} | ${st.posicionamento} Lugar\n`; });
@@ -3848,12 +3868,27 @@ const PainelAcompanhamento = () => {
               })
             )
           ),
-          (posicionados.length>0||suspensos.length>0||nogos.length>0) && /*#__PURE__*/React.createElement("div", {className:"px-5 py-4"},
+          (emRecurso.length>0||posicionados.length>0||suspensos.length>0||nogos.length>0) && /*#__PURE__*/React.createElement("div", {className:"px-5 py-4"},
             /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-2 mb-3"},
               /*#__PURE__*/React.createElement("span", null, "🔍"),
               /*#__PURE__*/React.createElement("span", {className:"text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400"}, "Demais Processos")
             ),
             /*#__PURE__*/React.createElement("div", {className:"space-y-4"},
+              emRecurso.length>0 && /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("p", {className:"text-[10px] font-bold uppercase tracking-wide text-orange-500 mb-1.5"}, "⚖️ EM RECURSO / CONTRARRAZÃO"),
+                /*#__PURE__*/React.createElement("div", {className:"space-y-1"},
+                  emRecurso.map(({item}) => {
+                    const st=statuses[item.id]||{};
+                    const faseLabel=st.fase==='recurso'?'Recurso':'Contrarrazão';
+                    return /*#__PURE__*/React.createElement("div", {key:item.id, className:"flex items-center gap-2 text-[11px] bg-orange-50 dark:bg-orange-950/20 rounded-lg px-3 py-1.5"},
+                      /*#__PURE__*/React.createElement("span", {className:"font-semibold text-slate-700 dark:text-slate-300 flex-1 truncate"}, getOrgao(item)),
+                      /*#__PURE__*/React.createElement("span", {className:"text-slate-400 shrink-0"}, getNumPregao(item)),
+                      st.posicionamento && /*#__PURE__*/React.createElement("span", {className:"font-bold text-slate-600 dark:text-slate-300 shrink-0 bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-[10px]"}, st.posicionamento + "º"),
+                      /*#__PURE__*/React.createElement("span", {className:"font-bold text-orange-600 dark:text-orange-400 shrink-0 text-[10px] bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded"}, faseLabel)
+                    );
+                  })
+                )
+              ),
               posicionados.length>0 && /*#__PURE__*/React.createElement("div", null,
                 /*#__PURE__*/React.createElement("p", {className:"text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5"}, "📍 POSICIONADOS"),
                 /*#__PURE__*/React.createElement("div", {className:"space-y-1"},
@@ -4019,6 +4054,11 @@ const PainelAcompanhamento = () => {
                     ),
                   ),
 
+                  (st.fase==='recurso'||st.fase==='contrarrazao') && /*#__PURE__*/React.createElement("div", {className:"flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 border-t border-orange-100 dark:border-orange-900/20 bg-orange-50/40 dark:bg-orange-950/10"},
+                    /*#__PURE__*/React.createElement("span", {className:"text-[9px] font-bold uppercase text-orange-500"}, st.fase==='recurso'?'⚖️ Prazo Recurso':'⚖️ Prazo Contrarrazão'),
+                    /*#__PURE__*/React.createElement("input", {type:"datetime-local", value:st.prazoRecurso||'', onChange:e=>saveStatus(item.id,'prazoRecurso',e.target.value||null), className:"text-[10px] text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 focus:outline-none border border-orange-200 dark:border-orange-800/50 rounded px-1.5 py-0.5 cursor-pointer focus:ring-1 focus:ring-orange-400"}),
+                    st.prazoRecurso && /*#__PURE__*/React.createElement("span", {className:"text-[10px] font-bold " + (new Date(st.prazoRecurso) - now <= 86400000 && new Date(st.prazoRecurso) > now ? "text-red-500 animate-pulse" : new Date(st.prazoRecurso) <= now ? "text-slate-400" : "text-orange-500")}, countdown(new Date(st.prazoRecurso), now) || 'Encerrado')
+                  ),
                   /*#__PURE__*/React.createElement("div", {className:"flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 border-t border-slate-100 dark:border-slate-800"},
                     /*#__PURE__*/React.createElement("div", {className:"flex items-center gap-1.5"},
                       /*#__PURE__*/React.createElement("span", {className:"text-[9px] font-bold uppercase text-slate-400"}, "Sistema"),
