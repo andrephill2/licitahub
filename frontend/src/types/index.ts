@@ -7,25 +7,26 @@ export interface User {
   expirationDate: string
 }
 
-export interface AuthState {
-  user: User | null
-  token: string | null
-}
-
 export interface LicitacaoItem {
   id: string
-  orgao?: string
-  uasg?: string
-  numPregao?: string
-  objeto?: string
-  modalidade?: string
-  dataAbertura?: string
-  dataEncerramento?: string
-  valorEstimado?: number
-  linkExterno?: string
-  esfera?: 'municipal' | 'estadual' | 'federal'
+  tituloBusca?: string
+  idContratacaoPncp?: string
+  objetoCompra?: string
+  orgaoEntidade?: { razaoSocial?: string }
+  dataPublicacao?: string
+  dataIncioRecebimento?: string
+  dataFimRecebimento?: string
+  rawDate?: string
+  rawPublicacaoDate?: string
+  modalidadeNome?: string
+  situacao?: string
+  valorTotalEstimado?: number
+  linkSistemaOrigem?: string
+  fonte?: string
+  esfera?: 'municipal' | 'estadual' | 'federal' | string
   uf?: string
-  municipio?: string
+  sistema?: string
+  isNewFromRadar?: boolean
   [key: string]: unknown
 }
 
@@ -51,26 +52,21 @@ export interface Favorito {
   savedAt: string
 }
 
-export interface SearchTab {
-  id: string
-  label: string
-  query: string
-  filters: SearchFilters
-}
-
 export interface SearchFilters {
-  uf?: string
-  esfera?: string
-  capag?: string
+  matchType?: 'approximate' | 'exact'
+  uf?: string[]
+  esfera?: string[]
+  capag?: string[]
   apenasVigentes?: boolean
   negativos?: string[]
   orgao?: string
   dataInicio?: string
   dataFim?: string
+  searchType?: 'edital' | 'ata' | 'contrato'
 }
 
 export interface CapagResponse {
   municipio: string
   uf: string
-  rating: string
+  rating: string | null
 }

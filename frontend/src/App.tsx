@@ -1,26 +1,21 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { LoginPage } from './features/auth/LoginPage'
 import { ProtectedRoute } from './features/auth/ProtectedRoute'
-import { Icon } from './components/Icon'
+import { Layout } from './components/Layout'
+import { SearchPage } from './features/search/SearchPage'
+import { TrackingPage } from './features/tracking/TrackingPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
 })
 
-function DashboardPlaceholder() {
-  return (
-    <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-slate-500 dark:text-slate-400">
-      <Icon name="zap" className="h-12 w-12 text-indigo-500" />
-      <div className="text-center">
-        <p className="text-xl font-semibold text-slate-700 dark:text-slate-300">LicitaHub</p>
-        <p className="text-sm mt-1">Dashboard em construção — componentes sendo migrados</p>
-      </div>
-    </div>
-  )
-}
+type View = 'search' | 'tracking' | 'admin'
 
-export default function App() {
+function App() {
+  const [view, setView] = useState<View>('search')
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -30,7 +25,15 @@ export default function App() {
             path="/*"
             element={
               <ProtectedRoute>
-                <DashboardPlaceholder />
+                <Layout view={view} onViewChange={setView}>
+                  {view === 'search' && <SearchPage />}
+                  {view === 'tracking' && <TrackingPage />}
+                  {view === 'admin' && (
+                    <div className="flex items-center justify-center py-24 text-slate-500">
+                      <p>Gestão de usuários — em breve</p>
+                    </div>
+                  )}
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -40,3 +43,5 @@ export default function App() {
     </QueryClientProvider>
   )
 }
+
+export default App
