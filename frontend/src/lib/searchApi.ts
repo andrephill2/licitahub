@@ -46,18 +46,26 @@ function extractValue(item: Record<string, unknown>): number {
   return 0
 }
 
+// Em dev aponta direto; em produção usa o proxy Vercel /api/pncp
+const IS_PROD = import.meta.env.PROD
+
 async function fetchSecure(url: string): Promise<Response | null> {
+  // Tenta direto primeiro (funciona em dev e quando CORS permite)
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } })
     if (res.ok) return res
-  } catch { /* fall through */ }
-  try {
-    const proxy = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`)
-    if (proxy.ok) {
-      const data = await proxy.json() as { contents: string }
-      return new Response(data.contents, { status: 200, headers: { 'Content-Type': 'application/json' } })
-    }
-  } catch { /* fall through */ }
+  } catch { /* cai no proxy */ }
+
+  // Em produção usa o proxy Vercel (sem CORS, sem allorigins.win)
+  if (IS_PROD && url.includes('pncp.gov.br')) {
+    try {
+      const pncpPath = url.replace('https://pncp.gov.br/api/', '')
+      const proxyUrl = `/api/pncp?path=${encodeURIComponent(pncpPath.split('?')[0])}&${pncpPath.split('?')[1] || ''}`
+      const res = await fetch(proxyUrl, { headers: { Accept: 'application/json' } })
+      if (res.ok) return res
+    } catch { /* fall through */ }
+  }
+
   return null
 }
 
