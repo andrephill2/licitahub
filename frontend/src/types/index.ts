@@ -31,20 +31,31 @@ export interface LicitacaoItem {
 }
 
 export type FaseStatus =
-  | 'licitacao'
-  | 'homologado'
-  | 'adjudicado'
+  | 'analise'
+  | 'proposta'
+  | 'lance'
   | 'recurso'
   | 'contrarrazao'
+  | 'adjudicado'
+  | 'homologado'
   | 'nogo'
+  | 'licitacao'
 
 export interface ItemStatus {
   fase?: FaseStatus
+  gonogo?: 'go' | 'nogo' | ''
+  suspenso?: boolean
   posicionamento?: string
+  sistema?: string
+  modos?: 'aberto' | 'fechado' | 'aberto_fechado'
   go?: boolean
   prazoLance?: string
   prazoEsclarecimento?: string
+  prazoRecurso?: string
   prazoPropostas?: string
+  prazoQuestionamento?: string
+  notas?: string
+  certame?: string
 }
 
 export interface Favorito {
