@@ -212,9 +212,10 @@ function TrackingCard({ item, status, onChange, onRemove, knownFileCount, onSetK
   const uf = item.uf || ''
   const title = uf ? `${orgao} • ${uf}` : orgao
 
-  const fimProposta = pncp.dataFimRecebimento || item.dataFimRecebimento
-  // Certame = manual > sessão PNCP > início de propostas
-  const dataCertame = status.certame || pncp.dataSessao || pncp.dataIncioRecebimento || item.dataIncioRecebimento || ''
+  // Certame = manual > sessão PNCP > fim do recebimento (data da sessão de lances)
+  const dataCertame = status.certame || pncp.dataSessao || pncp.dataFimRecebimento || item.dataFimRecebimento || ''
+  // Proposta = início do recebimento (abertura)
+  const fimProposta = pncp.dataIncioRecebimento || item.dataIncioRecebimento
 
   const PRE_FASES: { value: FaseStatus; label: string }[] = [
     { value: 'proposta', label: 'Participação' },
@@ -334,7 +335,7 @@ function TrackingCard({ item, status, onChange, onRemove, knownFileCount, onSetK
           {fimProposta && (
             <>
               <span className="text-slate-300 dark:text-slate-600">|</span>
-              <span className="text-slate-500">PROPOSTA: <span className="font-bold text-slate-700 dark:text-slate-300">{formatShort(fimProposta)}</span>
+              <span className="text-slate-500">ABERTURA: <span className="font-bold text-slate-700 dark:text-slate-300">{formatShort(fimProposta)}</span>
                 {(() => {
                   const tl = timeLeft(fimProposta)
                   return tl ? <span className={cn('ml-1', tl === 'Encerrado' ? 'text-slate-400' : 'text-red-600 dark:text-red-400 font-bold')}>({tl})</span> : null
