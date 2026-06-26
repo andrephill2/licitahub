@@ -675,19 +675,6 @@ export function SearchPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {displayedItems.map((item) => (
               <div key={item.id} className="relative">
-                {/* Checkbox flutuante no canto superior esquerdo */}
-                <label className="absolute top-3 left-3 z-20 flex items-center justify-center w-5 h-5 cursor-pointer bg-white/90 dark:bg-slate-900/90 rounded shadow-sm border border-slate-200 dark:border-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(item.id)}
-                    onChange={() => {
-                      const next = new Set(selected)
-                      selected.has(item.id) ? next.delete(item.id) : next.add(item.id)
-                      setSelected(next)
-                    }}
-                    className="accent-indigo-600 h-3.5 w-3.5 cursor-pointer"
-                  />
-                </label>
                 {selected.has(item.id) && (
                   <div className="absolute inset-0 rounded-2xl ring-2 ring-indigo-500 ring-offset-2 z-10 pointer-events-none" />
                 )}
@@ -695,6 +682,12 @@ export function SearchPage() {
                   item={item}
                   isNew={!!item.isNewFromRadar}
                   keyword={activeKeyword}
+                  isSelected={selected.has(item.id)}
+                  onToggleSelect={() => {
+                    const next = new Set(selected)
+                    selected.has(item.id) ? next.delete(item.id) : next.add(item.id)
+                    setSelected(next)
+                  }}
                   onArchive={(i) => { if (confirm('Deseja arquivar este edital?')) archiveItem(i.id, i) }}
                 />
               </div>

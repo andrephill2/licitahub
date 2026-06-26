@@ -71,9 +71,11 @@ interface Props {
   isNew?: boolean
   keyword?: string
   onArchive?: (item: LicitacaoItem) => void
+  isSelected?: boolean
+  onToggleSelect?: () => void
 }
 
-export function LicitacaoCard({ item, isNew, keyword = '', onArchive }: Props) {
+export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected, onToggleSelect }: Props) {
   const { favoritos, addFavorito, removeFavorito } = useFavoritosStore()
   const isFav = !!favoritos[item.id]
   const [arquivos, setArquivos] = useState<PncpArq[] | null>(null)
@@ -143,16 +145,27 @@ export function LicitacaoCard({ item, isNew, keyword = '', onArchive }: Props) {
 
       {/* Radar new indicator */}
       {isNew && (
-        <div className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-green-500 border-2 border-white dark:border-slate-900 flex items-center justify-center" title="Novidade encontrada pelo Radar!">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500" />
+        <div className="absolute top-0 right-0 flex items-center gap-1 bg-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-tr-2xl rounded-bl-xl shadow-sm z-10" title="Novidade encontrada pelo Radar!">
+          <Icon name="target" className="h-3.5 w-3.5" />
+          RADAR
         </div>
       )}
 
       <div className="p-4 flex-1 flex flex-col gap-2">
         {/* Modalidade + situação badges + actions */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-wrap gap-1">
+        <div className="flex items-center gap-2">
+          {/* Checkbox — lado esquerdo, separado dos botões de ação */}
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={onToggleSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="accent-indigo-600 h-4 w-4 cursor-pointer rounded shrink-0"
+              title="Selecionar"
+            />
+          )}
+          <div className="flex flex-wrap gap-1 flex-1">
             {modalidade && (
               <span className="text-[10px] font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">
                 {modalidade}
