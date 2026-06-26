@@ -92,17 +92,28 @@ export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected
     const [, cnpj, seqStr, ano] = m
     const seq = parseInt(seqStr, 10)
     let cancelled = false
-    const baseUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`
-    const proxyUrl = `/api/pncp?path=${encodeURIComponent(`orgaos/${cnpj}/compras/${ano}/${seq}/itens`)}`
     const tryFetch = async (u: string) => { try { const r = await fetch(u, { headers: { Accept: 'application/json' } }); if (r.ok) return await r.json() } catch { /* */ } return null }
-    Promise.any([tryFetch(baseUrl), tryFetch(proxyUrl)].map(p => Promise.resolve(p).then(v => v ?? Promise.reject())))
+
+    // 1) Busca a contratação diretamente — tem valorTotalEstimado garantido
+    const proxyContratacao = `/api/pncp?path=${encodeURIComponent(`orgaos/${cnpj}/compras/${ano}/${seq}`)}`
+    const directContratacao = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}`
+    Promise.any([tryFetch(proxyContratacao), tryFetch(directContratacao)].map(p => Promise.resolve(p).then(v => v ?? Promise.reject())))
       .then((data) => {
         if (cancelled) return
-        const rows = Array.isArray(data) ? data : ((data as Record<string, unknown>)?.data as unknown[] || [])
-        const total = (rows as Record<string, unknown>[]).reduce((s, i) => s + (Number(i.quantidade) || 1) * (Number(i.valorUnitarioEstimado) || 0), 0)
-        if (total > 0) { valorCache.set(item.idContratacaoPncp!, total); setDynamicValor(total) }
+        const val = Number((data as Record<string, unknown>)?.valorTotalEstimado || 0)
+        if (val > 0) { valorCache.set(item.idContratacaoPncp!, val); setDynamicValor(val); return }
+        // 2) Fallback: calcula a partir dos itens
+        const proxyItens = `/api/pncp?path=${encodeURIComponent(`orgaos/${cnpj}/compras/${ano}/${seq}/itens`)}`
+        const directItens = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`
+        return Promise.any([tryFetch(proxyItens), tryFetch(directItens)].map(p => Promise.resolve(p).then(v => v ?? Promise.reject())))
+          .then((rows) => {
+            if (cancelled) return
+            const list = Array.isArray(rows) ? rows : ((rows as Record<string, unknown>)?.data as unknown[] || [])
+            const total = (list as Record<string, unknown>[]).reduce((s, i) => s + (Number(i.quantidade) || 1) * (Number(i.valorUnitarioEstimado) || 0), 0)
+            if (total > 0) { valorCache.set(item.idContratacaoPncp!, total); setDynamicValor(total) }
+          }).catch(() => {})
       })
-      .catch(() => { /* nenhum retornou valor */ })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [item.id, item.idContratacaoPncp, item.valorTotalEstimado])
 

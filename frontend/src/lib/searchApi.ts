@@ -38,6 +38,9 @@ function extractValue(item: Record<string, unknown>): number {
     item.valorTotalEstimado, item.valor_total_estimado,
     item.valorEstimado, item.valor_estimado,
     item.valorTotal, item.valor_total,
+    item.valor, item.valor_estimado_total,
+    item.valorGlobal, item.valor_global,
+    item.valorTotalHomologado, item.valor_total_homologado,
   ]
   for (const c of candidates) {
     const n = Number(c)
@@ -154,6 +157,65 @@ async function searchComprasGov(keyword: string, vigentes: boolean): Promise<Lic
   })
 }
 
+// PNCP endpoint alternativo: /consulta/v1/contratacoes/publicacao
+// Pega editais dos últimos 90 dias por modalidade e filtra pelo keyword client-side
+async function searchPNCPConsulta(keyword: string, vigentes: boolean): Promise<{ items: LicitacaoItem[]; total: number }> {
+  const today = new Date()
+  const past = new Date(today)
+  past.setMonth(past.getMonth() - 3)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+
+  const modalidades = [1, 2, 3, 4, 6, 7, 8] // pregão, concorrência, etc
+  const fetches = modalidades.map(async (mod) => {
+    try {
+      const url = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=${fmt(past)}&dataFinal=${fmt(today)}&codigoModalidadeContratacao=${mod}&pagina=1&tamanhoPagina=50`
+      const res = await fetchSecure(url)
+      if (!res) return []
+      const json = await res.json() as { data?: Record<string, unknown>[] }
+      return json.data || []
+    } catch { return [] }
+  })
+
+  const rawAll = (await Promise.all(fetches)).flat() as Record<string, unknown>[]
+  const kwNorm = normalizeStr(keyword).split(/\s+/).filter(Boolean)
+
+  const items: LicitacaoItem[] = rawAll
+    .filter((item) => {
+      const text = normalizeStr(String(item.objetoCompra || item.descricao || ''))
+      return kwNorm.every((w) => text.includes(w))
+    })
+    .map((item): LicitacaoItem => {
+      const orgao = item.orgaoEntidade as Record<string, unknown> | undefined
+      const unidade = item.unidadeOrgao as Record<string, unknown> | undefined
+      const cnpj = String(item.cnpjEntidade || orgao?.cnpj || '')
+      const ano = String(item.anoCompra || '')
+      const seq = String(item.sequencialCompra || '')
+      const idContratacao = String(item.numeroControlePNCP || (cnpj && ano && seq ? `${cnpj}-${ano}-${seq}` : ''))
+      return {
+        id: `pncp-consulta-${idContratacao || Math.random()}`,
+        tituloBusca: seq && ano ? `Edital nº ${String(seq).padStart(3, '0')}/${ano}` : 'Edital / Contratação',
+        idContratacaoPncp: idContratacao,
+        objetoCompra: String(item.objetoCompra || 'Sem título'),
+        orgaoEntidade: { razaoSocial: String(item.nomeEntidade || orgao?.razaoSocial || '') },
+        dataPublicacao: formatDate(String(item.dataPublicacaoPncp || '')),
+        dataIncioRecebimento: formatDateTime(String(item.dataAberturaProposta || '')),
+        dataFimRecebimento: formatDateTime(String(item.dataEncerramentoProposta || '')),
+        rawDate: String(item.dataAberturaProposta || item.dataPublicacaoPncp || '1970-01-01'),
+        rawPublicacaoDate: String(item.dataPublicacaoPncp || '1970-01-01'),
+        modalidadeNome: String(item.modalidadeNome || 'Pregão'),
+        situacao: vigentes ? 'Recebendo Proposta' : String(item.situacaoCompraNome || 'Publicado'),
+        valorTotalEstimado: Number(item.valorTotalEstimado || 0),
+        linkSistemaOrigem: cnpj && ano && seq ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}` : '',
+        fonte: 'PNCP',
+        uf: String(unidade?.ufSigla || item.uf || ''),
+        esfera: getEsfera(String(item.nomeEntidade || ''), String(item.esferaNome || '')),
+      }
+    })
+
+  return { items, total: items.length }
+}
+
 export async function runSearch(
   keyword: string,
   filters: SearchFilters,
@@ -168,9 +230,12 @@ export async function runSearch(
     const r = await searchPNCP(kw, 1, filters.apenasVigentes || false, 'ata')
     allItems = r.items
   } else {
-    const promises = [searchPNCP(kw, 1, filters.apenasVigentes || false, 'edital')]
-    promises.push(searchComprasGov(kw, filters.apenasVigentes || false).then((items) => ({ items, total: items.length })))
-    const results = await Promise.allSettled(promises)
+    const sources = [
+      searchPNCP(kw, 1, filters.apenasVigentes || false, 'edital'),
+      searchComprasGov(kw, filters.apenasVigentes || false).then((items) => ({ items, total: items.length })),
+      searchPNCPConsulta(kw, filters.apenasVigentes || false),
+    ]
+    const results = await Promise.allSettled(sources)
     results.forEach((r) => {
       if (r.status === 'fulfilled' && r.value) {
         const val = r.value as { items?: LicitacaoItem[] } | LicitacaoItem[]
