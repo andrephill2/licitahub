@@ -213,8 +213,8 @@ function TrackingCard({ item, status, onChange, onRemove, knownFileCount, onSetK
   const title = uf ? `${orgao} • ${uf}` : orgao
 
   const fimProposta = pncp.dataFimRecebimento || item.dataFimRecebimento
-  // Certame = data da sessão de lances vinda do PNCP, ou valor manual salvo pelo usuário
-  const dataCertame = status.certame || pncp.dataSessao || ''
+  // Certame = manual > sessão PNCP > início de propostas
+  const dataCertame = status.certame || pncp.dataSessao || pncp.dataIncioRecebimento || item.dataIncioRecebimento || ''
 
   const PRE_FASES: { value: FaseStatus; label: string }[] = [
     { value: 'proposta', label: 'Participação' },
