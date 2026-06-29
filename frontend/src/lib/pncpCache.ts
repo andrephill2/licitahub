@@ -77,7 +77,7 @@ async function pncpRace(url: string): Promise<unknown> {
   const direct = fetch(url, { headers: { Accept: 'application/json' }, signal: sig })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
 
-  const path = url.replace('https://pncp.gov.br/api/pncp/v1/', '')
+  const path = url.replace('https://pncp.gov.br/api/consulta/v1/', '').replace('https://pncp.gov.br/api/pncp/v1/', '')
   const proxy = fetch(`/api/pncp?path=${encodeURIComponent(path)}`, { headers: { Accept: 'application/json' }, signal: sig })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
 
