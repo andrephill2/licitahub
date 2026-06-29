@@ -409,36 +409,6 @@ function TrackingCard({ item, status, onChange, onRemove, knownFileCount, onSetK
           </div>
         )}
 
-        {/* PNCP raw debug — mostra o que foi detectado pelo PNCP */}
-        {!pncp.loading && (pncp.modoDisputa || pncp.sistemaOrigem || pncp.linkPortal) && (
-          <div className="flex flex-wrap gap-2 text-[10px] text-slate-400 dark:text-slate-500 pl-0.5">
-            <span className="font-black uppercase tracking-wide text-slate-300 dark:text-slate-600">PNCP detectou:</span>
-            {pncp.modoDisputa && (
-              <span className="flex items-center gap-1">
-                Modo: <span className="font-bold text-slate-500 dark:text-slate-400">{pncp.modoDisputa}</span>
-                {!status.modos && (
-                  <button
-                    onClick={() => { const m = mapModo(pncp.modoDisputa || ''); if (m) onChange({ modos: m }) }}
-                    className="text-indigo-500 hover:text-indigo-700 font-bold underline"
-                  >[usar]</button>
-                )}
-              </span>
-            )}
-            {(pncp.sistemaOrigem || pncp.linkPortal) && (
-              <span className="flex items-center gap-1">
-                Portal: <span className="font-bold text-slate-500 dark:text-slate-400">
-                  {pncp.sistemaOrigem || detectSistema(pncp.linkPortal || '') || pncp.linkPortal?.slice(0, 40)}
-                </span>
-                {!status.sistema && (pncp.sistemaOrigem || detectSistema(pncp.linkPortal || '')) && (
-                  <button
-                    onClick={() => onChange({ sistema: pncp.sistemaOrigem || detectSistema(pncp.linkPortal || '') })}
-                    className="text-indigo-500 hover:text-indigo-700 font-bold underline"
-                  >[usar]</button>
-                )}
-              </span>
-            )}
-          </div>
-        )}
 
         {/* Row 3b: prazos badge chips */}
         {(status.prazoEsclarecimento || status.prazoLance || status.prazoRecurso || status.prazoQuestionamento) && (
