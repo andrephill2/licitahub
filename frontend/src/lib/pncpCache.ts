@@ -28,13 +28,21 @@ export interface PncpDetail {
 
 function _detectPortalFromUrl(url: string): string {
   const u = url.toLowerCase()
-  if (u.includes('comprasnet')) return 'ComprasNet'
-  if (u.includes('bll.org')) return 'BLL'
-  if (u.includes('bnc.org')) return 'BNC'
+  if (u.includes('comprasnet') || u.includes('comprasgovernamentais') || u.includes('compras.gov.br/pregao')) return 'ComprasNet'
+  if (u.includes('compras.mg.gov.br') || u.includes('compras.mg.gov')) return 'Compras MG'
+  if (u.includes('bll.org') || u.includes('bllcompras')) return 'BLL'
+  if (u.includes('bnc.org') || u.includes('bnclicitacoes')) return 'BNC'
   if (u.includes('licitacoes-e') || u.includes('licitacoese') || u.includes('licitacaoe')) return 'Licitações-E BB'
   if (u.includes('caixa') && u.includes('licit')) return 'Licitações Caixa'
-  if (u.includes('banrisul')) return 'Banrisul'
+  if (u.includes('banrisul') || u.includes('pregaobanrisul')) return 'Banrisul'
   if (u.includes('portaldecompras') || u.includes('compras.gov')) return 'Portal de Compras Gov.'
+  if (u.includes('licitacao.rs.gov') || u.includes('celic')) return 'CELIC/RS'
+  if (u.includes('bbmnet') || u.includes('bbmlicitacoes')) return 'BBM Licitações'
+  if (u.includes('licitanet')) return 'Licitanet'
+  if (u.includes('publicacompras') || u.includes('publica-compras')) return 'Publica Compras'
+  if (u.includes('licitardigital') || u.includes('licitar.digital')) return 'Licitar Digital'
+  if (u.includes('comprasbr') || u.includes('compras.br')) return 'ComprasBR'
+  if (u.includes('pncp.gov.br')) return 'PNCP'
   return ''
 }
 
@@ -122,10 +130,10 @@ export async function fetchPncpDetail(idContratacaoPncp: string): Promise<Partia
     const data = mainData as Record<string, unknown>
 
     result.dataFimRecebimento = fdt(
-      data.dataFimRecebimentoProposta || data.dataEncerramentoProposta || data.dataFimRecebimento
+      data.dataFimRecebimentoProposta || data.dataEncerramentoProposta || data.dataFimRecebimento || data.dataEncerramentoLances
     )
     result.dataIncioRecebimento = fdt(
-      data.dataAberturaPropostas || data.dataInicioRecebimentoProposta || data.dataIncioRecebimento
+      data.dataAberturaProposta || data.dataAberturaPropostas || data.dataInicioRecebimentoProposta || data.dataIncioRecebimento
     )
     result.situacao = String(data.situacaoCompraNome || data.situacao || '')
 
