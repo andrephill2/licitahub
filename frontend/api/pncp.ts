@@ -13,8 +13,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === 'search') {
     url = `${PNCP_BASE}/search/?${new URLSearchParams(params)}`
   } else {
-    // /api/pncp?path=orgaos/CNPJ/compras/ANO/SEQ
-    url = `${PNCP_BASE}/pncp/v1/${path}`
+    // /api/pncp?path=orgaos/CNPJ/compras/ANO/SEQ[/itens|/arquivos|/periodos]
+    // PNCP migrou detail de /pncp/v1/ para /consulta/v1/
+    url = `${PNCP_BASE}/consulta/v1/${path}`
   }
 
   try {
