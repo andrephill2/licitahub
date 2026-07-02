@@ -94,6 +94,16 @@ async function fetchSecure(url: string): Promise<Response | null> {
   }
 }
 
+// Converte o item_url devolvido pela busca do PNCP na URL pública do portal.
+// O PNCP nomeia editais como "compras" no item_url (ex.: /compras/{cnpj}/{ano}/{seq}),
+// mas a rota do site é /editais; atas e contratos já vêm com o nome da rota
+// (ex.: /atas/{cnpj}/{ano}/{seqCompra}/{seqAta}).
+function pncpAppUrl(itemUrl: string): string {
+  if (!itemUrl) return ''
+  const path = (itemUrl.startsWith('/') ? itemUrl : '/' + itemUrl).replace(/^\/compras\//, '/editais/')
+  return `https://pncp.gov.br/app${path}`
+}
+
 function mapPncpSearchItem(
   item: Record<string, unknown>,
   tipo: 'edital' | 'ata',
@@ -102,7 +112,12 @@ function mapPncpSearchItem(
   const cnpj = String(item.orgao_cnpj || item.cnpj || '')
   const ano = String(item.ano_compra || item.ano || '')
   const seq = String(item.numero_sequencial || item.sequencial_compra || '')
-  const link = cnpj && ano && seq ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}` : ''
+  // Preferir o item_url do próprio PNCP (aponta para a rota correta — editais têm
+  // 3 segmentos, atas têm 4). Só reconstruir quando ele não vier.
+  const itemUrl = String(item.item_url || '')
+  const link = itemUrl
+    ? pncpAppUrl(itemUrl)
+    : (cnpj && ano && seq ? `https://pncp.gov.br/app/${tipo === 'ata' ? 'atas' : 'editais'}/${cnpj}/${ano}/${seq}` : '')
   const id = String(item.numero_controle_pncp || item.numeroControlePNCP || `${cnpj}-${ano}-${seq}`)
   const numC = String(item.numero_compra || seq)
   const titulo = numC && ano
