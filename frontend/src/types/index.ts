@@ -5,6 +5,7 @@ export interface User {
   username: string
   role: UserRole
   expirationDate: string
+  cnpj?: string | null
 }
 
 export interface LicitacaoItem {
@@ -25,8 +26,10 @@ export interface LicitacaoItem {
   fonte?: string
   esfera?: 'municipal' | 'estadual' | 'federal' | string
   uf?: string
+  municipio?: string
   sistema?: string
   isNewFromRadar?: boolean
+  capagNota?: string
   [key: string]: unknown
 }
 
@@ -38,7 +41,6 @@ export type FaseStatus =
   | 'contrarrazao'
   | 'adjudicado'
   | 'homologado'
-  | 'nogo'
   | 'licitacao'
 
 export interface ItemStatus {
@@ -48,14 +50,20 @@ export interface ItemStatus {
   posicionamento?: string
   sistema?: string
   modos?: 'aberto' | 'fechado' | 'aberto_fechado'
-  go?: boolean
   prazoLance?: string
   prazoEsclarecimento?: string
   prazoRecurso?: string
+  prazoContrarrazao?: string
   prazoPropostas?: string
   prazoQuestionamento?: string
   notas?: string
   certame?: string
+  driveUrl?: string     // link da pasta da licitação no Google Drive
+  responsavel?: string  // username do colaborador do Time responsável pela fase atual
+  // Decisão por item/lote: chaveado pelo numeroItem do PNCP.
+  itens?: Record<string, { participar?: boolean; precoAlvo?: number; obs?: string }>
+  habilitacao?: Record<string, boolean>  // checklist de documentos (tenho/não tenho)
+  exigencias?: Record<string, boolean>   // flags críticas (amostra, visita, ME/EPP...)
 }
 
 export interface Favorito {
@@ -70,6 +78,7 @@ export interface SearchFilters {
   capag?: string[]
   apenasVigentes?: boolean
   negativos?: string[]
+  sinonimos?: string[]
   orgao?: string
   dataInicio?: string
   dataFim?: string

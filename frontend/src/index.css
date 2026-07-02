@@ -3,13 +3,27 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 40% 98%;
-  --foreground: 222.2 84% 4.9%;
+  /* Fundo claro com leve tom violeta da marca */
+  --background: 252 45% 98%;
+  --foreground: 253 40% 8%;
 }
 
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
+  /* Navy-violeta profundo, mesmo universo da landing (#0B0918) */
+  --background: 253 38% 6%;
+  --foreground: 252 40% 96%;
+}
+
+.theme-sepia {
+  /* Modo leitura: papel envelhecido, quente e de baixo contraste */
+  --background: 40 42% 90%;
+  --foreground: 32 35% 16%;
+}
+
+.font-ebook {
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
 }
 
 body {
@@ -17,10 +31,88 @@ body {
   color: hsl(var(--foreground));
   transition: background-color 0.3s ease;
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Brilho violeta sutil no topo, ecoando o hero da landing */
+  background-image: radial-gradient(60rem 24rem at 50% -8rem, rgba(157, 111, 255, 0.07), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+.dark body {
+  background-image: radial-gradient(60rem 24rem at 50% -8rem, rgba(157, 111, 255, 0.12), transparent 70%);
+}
+
+/* Títulos com a fonte de display da marca */
+h1, h2, h3 {
+  font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Foco visível consistente com a marca */
+:focus-visible {
+  outline: 2px solid #9d6fff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgba(157, 111, 255, 0.28);
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-.dark ::-webkit-scrollbar-thumb { background: #334155; }
+::-webkit-scrollbar-thumb { background: #cbc4e0; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #a981fb; }
+.dark ::-webkit-scrollbar-thumb { background: #3a3153; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #5829ae; }
+
+/* ── Modo sépia ─────────────────────────────────────────────────────────
+   Reaproveita o tema claro e aquece as superfícies principais para tom de
+   papel. Overrides direcionados às utilities mais usadas nas telas. */
+.theme-sepia body {
+  background-image: radial-gradient(60rem 24rem at 50% -8rem, rgba(157, 111, 255, 0.05), transparent 70%);
+}
+.theme-sepia .bg-white { background-color: #faf3e1 !important; }
+.theme-sepia .bg-white\/95 { background-color: rgba(250, 243, 225, 0.95) !important; }
+.theme-sepia .bg-white\/90 { background-color: rgba(250, 243, 225, 0.9) !important; }
+.theme-sepia .bg-white\/80 { background-color: rgba(250, 243, 225, 0.85) !important; }
+.theme-sepia .bg-slate-50 { background-color: #f3ead2 !important; }
+.theme-sepia .bg-slate-50\/70 { background-color: rgba(243, 234, 210, 0.7) !important; }
+.theme-sepia .bg-slate-100 { background-color: #ede2c6 !important; }
+.theme-sepia .bg-slate-200 { background-color: #e4d7b6 !important; }
+.theme-sepia .border-slate-100 { border-color: #eadfc2 !important; }
+.theme-sepia .border-slate-200 { border-color: #ddcfab !important; }
+.theme-sepia .border-slate-200\/50 { border-color: rgba(221, 207, 171, 0.5) !important; }
+.theme-sepia .border-slate-300 { border-color: #cfbf95 !important; }
+.theme-sepia .text-slate-400 { color: #96835f !important; }
+.theme-sepia .text-slate-500 { color: #7d6c4b !important; }
+.theme-sepia .text-slate-600 { color: #64553a !important; }
+.theme-sepia .text-slate-700 { color: #4d4130 !important; }
+.theme-sepia .text-slate-800 { color: #3a3023 !important; }
+.theme-sepia .text-slate-900 { color: #2b2318 !important; }
+.theme-sepia ::-webkit-scrollbar-thumb { background: #cbb98d; }
+
+/* Shimmer para skeletons de carregamento */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(157, 111, 255, 0.10), transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* Respeita usuários com preferência por menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

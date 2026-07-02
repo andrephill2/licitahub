@@ -5,7 +5,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
 
 const variantClasses: Record<Variant, string> = {
-  primary: 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400',
+  primary: 'bg-gradient-to-b from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700 shadow-md shadow-indigo-600/25 disabled:opacity-60 disabled:shadow-none',
   secondary: 'bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600',
   ghost: 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
   danger: 'bg-red-500 text-white hover:bg-red-600 disabled:bg-red-300',
@@ -29,7 +29,7 @@ export function Button({ variant = 'primary', size = 'md', loading, children, cl
       {...props}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center gap-2 rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed',
+        'inline-flex items-center gap-2 rounded-xl font-semibold transition-all cursor-pointer disabled:cursor-not-allowed active:scale-[0.98]',
         variantClasses[variant],
         sizeClasses[size],
         className

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '../../components/Icon'
 import { Button } from '../../components/Button'
-import { supabase } from '../../lib/supabase'
+import { useAuthStore } from '../../stores/authStore'
 
 interface UserProfile {
   id: string
@@ -19,12 +19,19 @@ export function AdminPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  async function loadUsers() {
-    setLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch('/api/users', { headers: { Authorization: `Bearer ${session?.access_token}` } })
-    if (res.ok) setUsers(await res.json())
-    setLoading(false)
+  function authHeader() {
+    const token = useAuthStore.getState().token
+    return { Authorization: `Bearer ${token}` }
+  }
+
+  async function loadUsers(silent = false) {
+    if (!silent) setLoading(true)
+    try {
+      const res = await fetch('/api/users', { headers: authHeader() })
+      if (res.ok) setUsers(await res.json())
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadUsers() }, [])
@@ -35,15 +42,21 @@ export function AdminPage() {
     if (!username || !password || !expiration) { setError('Preencha todos os campos.'); return }
     setSaving(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ username, password, expirationDate: expiration }),
       })
       if (!res.ok) { const j = await res.json(); setError(j.error || 'Erro ao criar usuário.'); return }
+      const created = await res.json()
+      // Adiciona imediatamente na lista (sem esconder enquanto recarrega)
+      setUsers((prev) => [
+        ...prev,
+        { id: created.id, username: username.trim(), role: 'common' as const, expiration_date: expiration },
+      ])
       setUsername(''); setPassword(''); setExpiration('')
-      await loadUsers()
+      // Sincroniza com o backend em background
+      loadUsers(true)
     } finally {
       setSaving(false)
     }
@@ -51,8 +64,7 @@ export function AdminPage() {
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Remover o usuário "${name}"?`)) return
-    const { data: { session } } = await supabase.auth.getSession()
-    await fetch(`/api/users?id=${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${session?.access_token}` } })
+    await fetch(`/api/users?id=${id}`, { method: 'DELETE', headers: authHeader() })
     setUsers((u) => u.filter((x) => x.id !== id))
   }
 
