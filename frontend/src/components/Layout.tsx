@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Icon } from './Icon'
-import { HelpModal } from './HelpModal'
 import { NotificacoesBell } from './NotificacoesBell'
 import { useAuthStore } from '../stores/authStore'
 import { useTeamStore } from '../stores/teamStore'
@@ -96,7 +95,7 @@ function RadarToasts() {
   )
 }
 
-type View = 'search' | 'tracking' | 'calendario' | 'concorrentes' | 'team' | 'admin'
+type View = 'search' | 'tracking' | 'calendario' | 'concorrentes' | 'team' | 'admin' | 'manual'
 
 interface LayoutProps {
   view: View
@@ -107,7 +106,6 @@ interface LayoutProps {
 export function Layout({ view, onViewChange, children }: LayoutProps) {
   const { user, logout } = useAuthStore()
   const { pendingInvitesForMe } = useTeamStore()
-  const [showHelp, setShowHelp] = useState(false)
 
   // Tema em 3 estados: claro → escuro → sépia (modo leitura)
   type Theme = 'light' | 'dark' | 'sepia'
@@ -192,8 +190,13 @@ export function Layout({ view, onViewChange, children }: LayoutProps) {
             </button>
             {/* Manual com rótulo visível — antes era só um "?" fácil de passar batido */}
             <button
-              onClick={() => setShowHelp(true)}
-              className="h-8 px-3 rounded-xl border border-white/15 text-slate-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-bold"
+              onClick={() => onViewChange('manual')}
+              className={cn(
+                'h-8 px-3 rounded-xl border transition-colors flex items-center gap-1.5 text-xs font-bold',
+                view === 'manual'
+                  ? 'border-indigo-400/50 bg-indigo-500/20 text-white'
+                  : 'border-white/15 text-slate-300 hover:bg-white/10 hover:text-white',
+              )}
               title="Manual de Funcionalidades — guia completo do sistema"
             >
               <Icon name="book" className="h-4 w-4" />
@@ -203,7 +206,6 @@ export function Layout({ view, onViewChange, children }: LayoutProps) {
               <Icon name="logout" className="h-4 w-4" />
             </button>
           </div>
-          {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
         </div>
 
         {/* Module tabs — superfície clara sob a navbar escura */}

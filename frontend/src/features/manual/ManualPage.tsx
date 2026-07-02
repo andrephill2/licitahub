@@ -1,9 +1,4 @@
-import { createPortal } from 'react-dom'
-import { Icon } from './Icon'
-
-interface HelpModalProps {
-  onClose: () => void
-}
+import { Icon } from '../../components/Icon'
 
 const SECTIONS = [
   {
@@ -137,104 +132,74 @@ const ICON_COLOR_MAP: Record<string, string> = {
   violet: 'text-violet-600 dark:text-violet-400',
 }
 
-export function HelpModal({ onClose }: HelpModalProps) {
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="relative flex flex-col max-h-[90vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-4xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-8 py-5 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md">
-              <Icon name="zap" className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-800 dark:text-white">Manual de Funcionalidades</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Licitrend — Guia completo do sistema</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <Icon name="x" className="h-5 w-5" />
-          </button>
+const ATALHOS: [string, string][] = [
+  ['Enter na busca', 'Executa a pesquisa sem clicar no botão'],
+  ['Estrela no card', 'Adiciona/remove dos favoritos'],
+  ['Caixa de seleção', 'Seleciona cards para arquivamento em lote'],
+  ['Radar ON + som', 'Alerta automático com toque sonoro ao encontrar novas oportunidades'],
+  ['Badge NOVA OPORTUNIDADE', 'Indica licitações encontradas pelo Radar nesta sessão'],
+  ['Marcar como Vistos', 'Remove destaque de todos os itens novos da aba ativa'],
+  ['Exportar Excel', 'Exporta os resultados filtrados para CSV (compatível com Excel)'],
+  ['CAPAG A/B/C/D', 'Filtra municípios por capacidade de pagamento (STN 2024, 5.568 municípios)'],
+]
+
+export function ManualPage() {
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Cabeçalho */}
+      <div className="flex items-center gap-3 mb-2">
+        <div className="h-11 w-11 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md">
+          <Icon name="book" className="h-6 w-6 text-white" />
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            O Licitrend é uma plataforma de inteligência em licitações públicas que agrega editais do PNCP e ComprasGov em tempo real, com ferramentas de monitoramento, análise e colaboração. Dica: a Agenda de Prazos (aba Acompanhamento) pode ser exportada em .ics para o Google Calendar, Outlook ou Apple Calendar.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {SECTIONS.map((section) => (
-              <div
-                key={section.title}
-                className={`rounded-2xl border p-5 ${COLOR_MAP[section.color]}`}
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon name={section.icon} className={`h-5 w-5 ${ICON_COLOR_MAP[section.color]}`} />
-                  <h3 className={`text-base font-black uppercase tracking-wide ${ICON_COLOR_MAP[section.color]}`}>
-                    {section.title}
-                  </h3>
-                </div>
-                <ul className="space-y-2.5">
-                  {section.items.map((item) => (
-                    <li key={item.name} className="leading-relaxed">
-                      <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}: </span>
-                      <span className="text-sm text-slate-600 dark:text-slate-300">{item.desc}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          {/* Atalhos rápidos */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
-            <h3 className="text-base font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Atalhos e dicas rápidas</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
-              {[
-                ['Enter na busca', 'Executa a pesquisa sem clicar no botão'],
-                ['Estrela no card', 'Adiciona/remove dos favoritos'],
-                ['Caixa de seleção', 'Seleciona cards para arquivamento em lote'],
-                ['Radar ON + som', 'Alerta automático com toque sonoro ao encontrar novas oportunidades'],
-                ['Badge NOVA OPORTUNIDADE', 'Indica licitações encontradas pelo Radar nesta sessão'],
-                ['Marcar como Vistos', 'Remove destaque de todos os itens novos da aba ativa'],
-                ['Exportar Excel', 'Exporta os resultados filtrados para CSV (compatível com Excel)'],
-                ['CAPAG A/B/C/D', 'Filtra municípios por capacidade de pagamento (STN 2024, 5.568 municípios)'],
-              ].map(([atalho, desc]) => (
-                <div key={atalho} className="flex gap-2">
-                  <span className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-0.5 font-mono text-xs font-bold text-slate-700 dark:text-slate-200 shrink-0 self-start">
-                    {atalho}
-                  </span>
-                  <span className="text-slate-600 dark:text-slate-300">{desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="shrink-0 px-8 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <p className="text-[11px] text-slate-400">
-            Dados de editais via PNCP (pncp.gov.br) e ComprasGov — atualizados em tempo real
-          </p>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors"
-          >
-            Entendido
-          </button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-800 dark:text-white">Manual de Funcionalidades</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Licitrend — Guia completo do sistema</p>
         </div>
       </div>
-    </div>,
-    document.body,
+
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 max-w-3xl">
+        O Licitrend é uma plataforma de inteligência em licitações públicas que agrega editais do PNCP e ComprasGov em tempo real, com ferramentas de monitoramento, análise e colaboração. Dica: a Agenda de Prazos (aba Acompanhamento) pode ser exportada em .ics para o Google Calendar, Outlook ou Apple Calendar.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {SECTIONS.map((section) => (
+          <div key={section.title} className={`rounded-2xl border p-5 ${COLOR_MAP[section.color]}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <Icon name={section.icon} className={`h-5 w-5 ${ICON_COLOR_MAP[section.color]}`} />
+              <h3 className={`text-base font-black uppercase tracking-wide ${ICON_COLOR_MAP[section.color]}`}>
+                {section.title}
+              </h3>
+            </div>
+            <ul className="space-y-2.5">
+              {section.items.map((item) => (
+                <li key={item.name} className="leading-relaxed">
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}: </span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">{item.desc}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {/* Atalhos rápidos */}
+      <div className="mt-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+        <h3 className="text-base font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Atalhos e dicas rápidas</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
+          {ATALHOS.map(([atalho, desc]) => (
+            <div key={atalho} className="flex gap-2">
+              <span className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-0.5 font-mono text-xs font-bold text-slate-700 dark:text-slate-200 shrink-0 self-start">
+                {atalho}
+              </span>
+              <span className="text-slate-600 dark:text-slate-300">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="mt-6 text-[11px] text-slate-400">
+        Dados de editais via PNCP (pncp.gov.br) e ComprasGov — atualizados em tempo real
+      </p>
+    </div>
   )
 }

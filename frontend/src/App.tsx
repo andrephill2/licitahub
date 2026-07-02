@@ -12,6 +12,7 @@ import { CalendarioPage } from './features/calendar/CalendarioPage'
 import { AnaliseConcorrentesPage } from './features/concorrentes/AnaliseConcorrentesPage'
 import { AdminPage } from './features/admin/AdminPage'
 import { TeamPage } from './features/team/TeamPage'
+import { ManualPage } from './features/manual/ManualPage'
 import { OnboardingModal } from './features/onboarding/OnboardingModal'
 import { useAuthStore } from './stores/authStore'
 import { useFavoritosStore } from './stores/favoritosStore'
@@ -25,7 +26,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
 })
 
-type View = 'search' | 'tracking' | 'calendario' | 'concorrentes' | 'team' | 'admin'
+type View = 'search' | 'tracking' | 'calendario' | 'concorrentes' | 'team' | 'admin' | 'manual'
 
 function DashboardShell() {
   const [view, setView] = useState<View>('search')
@@ -146,6 +147,7 @@ function DashboardShell() {
       {view === 'concorrentes' && <AnaliseConcorrentesPage />}
       {view === 'team' && <TeamPage />}
       {view === 'admin' && user?.role === 'master' && <AdminPage />}
+      {view === 'manual' && <ManualPage />}
     </Layout>
   )
 }
