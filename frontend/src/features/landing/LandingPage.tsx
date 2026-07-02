@@ -309,10 +309,6 @@ export function LandingPage() {
               <h2>Acompanhe até o resultado.</h2>
               <p>Veja em que pé tá cada licitação, de relance. Trabalhe com o seu time, compartilhe — ou não — cada acompanhamento, e receba alertas das movimentações importantes.</p>
             </div>
-            <div className="shot-frame">
-              <img src="/screens/acompanhamento.png" alt="Painel de acompanhamento do Licitrend com a agenda de prazos legais" loading="lazy" />
-            </div>
-            <p className="shot-cap">Agenda de prazos legais — impugnação, sessão e recurso calculados em dias úteis.</p>
             <div className="kanban">
               <div className="kan-col">
                 <h4>Triagem <span>2</span></h4>
@@ -393,14 +389,17 @@ export function LandingPage() {
 
         <section id="cta">
           <div className="wrap">
-            <div className="cta-banner">
-              <span className="eyebrow">Comece agora</span>
-              <h2>Pronto pra chegar na frente?</h2>
-              <p>Crie sua conta e comece a monitorar em minutos.</p>
-              <div className="hero-ctas">
-                <Link to="/register" className="btn btn-primary btn-lg">Quero me cadastrar</Link>
-                <a href="mailto:licitrend@gmail.com" className="btn btn-ghost btn-lg">Falar com o time</a>
-              </div>
+            <div className="section-head" style={{ textAlign: 'center', margin: '0 auto 40px' }}>
+              <span className="eyebrow">Gestão de prazos</span>
+              <h2>Nunca mais perca um prazo.</h2>
+              <p>Impugnação, sessão e recurso calculados em dias úteis, já descontando os feriados nacionais e das 27 UFs — numa agenda que avisa antes.</p>
+            </div>
+            <div className="shot-frame">
+              <img src="/screens/acompanhamento.png" alt="Agenda de prazos legais do Licitrend — impugnação, sessão e recurso" loading="lazy" />
+            </div>
+            <div className="hero-ctas" style={{ justifyContent: 'center', marginTop: '32px' }}>
+              <Link to="/register" className="btn btn-primary btn-lg">Quero me cadastrar</Link>
+              <a href="mailto:licitrend@gmail.com" className="btn btn-ghost btn-lg">Falar com o time</a>
             </div>
           </div>
         </section>
