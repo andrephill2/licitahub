@@ -4,6 +4,7 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/auth/login", "destination": "/api/auth" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

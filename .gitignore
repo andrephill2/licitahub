@@ -5,3 +5,10 @@ dist/
 .DS_Store
 frontend/dist/
 backend/dist/
+
+# Runtime data / secrets — não versionar
+backend/users.json
+
+# Dumps legados de referência
+_app_logic.txt
+_legacy_js_chunk*.txt
