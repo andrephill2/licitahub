@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import bcrypt from 'bcryptjs'
-import { inMemoryUsers } from '../db/client.js'
+import { loadUsers } from '../db/client.js'
 import { signToken } from '../middleware/auth.js'
 
 export const authRouter = new Hono()
@@ -12,13 +12,12 @@ authRouter.post('/login', async (c) => {
     return c.json({ error: 'Usuário e senha são obrigatórios' }, 400)
   }
 
-  const user = inMemoryUsers.find((u) => u.username === username)
+  const user = loadUsers().find((u) => u.username === username)
   if (!user) {
     return c.json({ error: 'Credenciais inválidas' }, 401)
   }
 
-  const expiry = new Date(user.expirationDate)
-  if (expiry < new Date()) {
+  if (user.role !== 'master' && new Date(user.expirationDate) < new Date()) {
     return c.json({ error: 'Conta expirada' }, 403)
   }
 
@@ -36,6 +35,7 @@ authRouter.post('/login', async (c) => {
       username: user.username,
       role: user.role,
       expirationDate: user.expirationDate,
+      cnpj: user.cnpj ?? null,
     },
   })
 })

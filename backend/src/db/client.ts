@@ -1,13 +1,6 @@
-import 'dotenv/config'
-
-export const DB_CONFIG = {
-  connectionString: process.env.DATABASE_URL || '',
-}
-
-// Placeholder — substituir por cliente real (Supabase, pg, etc.)
-// Exemplo com Supabase:
-// import { createClient } from '@supabase/supabase-js'
-// export const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
+import fs from 'fs'
+import path from 'path'
+import bcrypt from 'bcryptjs'
 
 export interface UserRecord {
   id: string
@@ -15,18 +8,32 @@ export interface UserRecord {
   passwordHash: string
   role: 'master' | 'common'
   expirationDate: string
+  cnpj?: string
 }
 
-// Seed in-memory para desenvolvimento (remover quando banco estiver conectado)
-import bcrypt from 'bcryptjs'
-const SEED_PASSWORD_HASH = bcrypt.hashSync('trocar-em-producao', 10)
+const USERS_FILE = path.resolve(__dirname, '../../users.json')
 
-export const inMemoryUsers: UserRecord[] = [
-  {
-    id: 'admin-master',
-    username: 'andre.philipe',
-    passwordHash: SEED_PASSWORD_HASH,
-    role: 'master',
-    expirationDate: '2099-12-31',
-  },
-]
+export function loadUsers(): UserRecord[] {
+  if (fs.existsSync(USERS_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'))
+    } catch {
+      // arquivo corrompido — recria
+    }
+  }
+  const seed: UserRecord[] = [
+    {
+      id: 'admin-master',
+      username: 'andre.philipe',
+      passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'sos@2025', 10),
+      role: 'master',
+      expirationDate: '2099-12-31',
+    },
+  ]
+  fs.writeFileSync(USERS_FILE, JSON.stringify(seed, null, 2))
+  return seed
+}
+
+export function saveUsers(users: UserRecord[]): void {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2))
+}
