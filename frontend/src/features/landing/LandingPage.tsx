@@ -173,14 +173,24 @@ export function LandingPage() {
             </div>
             <div className="features-grid">
               <div className="feature">
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#C9B6FF" strokeWidth="1.6"/><path d="m20 20-3.6-3.6" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                <h3>Busca em todas as fontes</h3>
+                <p>Pesquisa PNCP e ComprasGov ao mesmo tempo. Uma busca, tudo junto.</p>
+              </div>
+              <div className="feature">
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M6 12h12M10 18h4" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                <h3>Filtros que importam</h3>
+                <p>UF, esfera, CAPAG do município, órgão e palavras negativas. Só o que interessa.</p>
+              </div>
+              <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#C9B6FF" strokeWidth="1.6"/><path d="M12 7v5l3.5 2" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round"/></svg>
-                <h3>Tempo determinado</h3>
-                <p>Define o prazo do radar. Ele desliga sozinho quando acabar.</p>
+                <h3>Radar por tempo determinado</h3>
+                <p>Define o intervalo do radar. Ele varre sozinho e desliga quando acabar.</p>
               </div>
               <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M9 18V8a3 3 0 0 1 6 0v10" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/><path d="M5 14a7 7 0 0 0 14 0" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 21v-3" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/></svg>
-                <h3>Sinal sonoro</h3>
-                <p>Edital novo, alerta sonoro na hora. Mesmo com o app fechado.</p>
+                <h3>Alerta sonoro</h3>
+                <p>Edital novo, toque na hora — e notificação no desktop, mesmo com o app fechado.</p>
               </div>
               <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="12" r="2" fill="#FF7A59"/><circle cx="16" cy="12" r="2" fill="#6E6390"/></svg>
@@ -188,24 +198,44 @@ export function LandingPage() {
                 <p>Chega marcado: o que é novidade e o que você já conferiu.</p>
               </div>
               <div className="feature">
-                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 7l1 12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1l1-12M4 7l1-3h14l1 3" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                <h3>Arquive</h3>
-                <p>Tira do radar sem apagar o histórico.</p>
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="2" stroke="#C9B6FF" strokeWidth="1.6"/><path d="M8 2v4M16 2v4M3 9h18" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round"/><path d="m9 15 2 2 4-4" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <h3>Prazos legais no automático</h3>
+                <p>Impugnação, recurso e contrarrazão em dias úteis, com os feriados das 27 UFs.</p>
               </div>
               <div className="feature">
-                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M12 17.3 6.2 20l1.1-6.5L2.5 9l6.6-1L12 2l2.9 6 6.6 1-4.8 4.5 1.1 6.5z" stroke="#FF7A59" strokeWidth="1.6" strokeLinejoin="round"/></svg>
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M13.7 21a2 2 0 0 1-3.4 0" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                <h3>Alerta de prazo</h3>
+                <p>O sino avisa quando a impugnação ou a sessão estão chegando. Um clique leva ao card.</p>
+              </div>
+              <div className="feature">
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M12 17.3 6.2 20l1.1-6.5L2.5 9l6.6-1L12 2l2.9 6 6.6 1-4.8 4.5 1.1 6.5z" stroke="#C9B6FF" strokeWidth="1.6" strokeLinejoin="round"/></svg>
                 <h3>Favoritos + calendário</h3>
                 <p>Favoritou, virou prazo no calendário. Automático.</p>
               </div>
               <div className="feature">
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M3 21h18" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/><path d="M5 21V7l8-4v18" stroke="#FF7A59" strokeWidth="1.6" strokeLinejoin="round"/><path d="M19 21V11l-6-3.5" stroke="#FF7A59" strokeWidth="1.6" strokeLinejoin="round"/><path d="M9 9v.01M9 13v.01M9 17v.01" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                <h3>Análise de concorrentes</h3>
+                <p>Digite o CNPJ e veja o histórico de disputas e os setores onde ele atua.</p>
+              </div>
+              <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="5" height="14" rx="1" stroke="#C9B6FF" strokeWidth="1.6"/><rect x="9.5" y="5" width="5" height="9" rx="1" stroke="#C9B6FF" strokeWidth="1.6"/><rect x="16" y="5" width="5" height="5" rx="1" stroke="#C9B6FF" strokeWidth="1.6"/></svg>
                 <h3>Etapas da licitação</h3>
-                <p>Triagem, análise, proposta, resultado. Tudo visível.</p>
+                <p>Triagem, análise, proposta, resultado. Com o time, tudo visível.</p>
               </div>
               <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M4 19V5a1 1 0 0 1 1-1h10l5 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" stroke="#FF7A59" strokeWidth="1.6"/><path d="M8 13h8M8 16h5" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/></svg>
                 <h3>Análise estratégica</h3>
                 <p>Risco, exigência e histórico do órgão, antes de entrar.</p>
+              </div>
+              <div className="feature">
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M12 3v12" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round"/><path d="m7 10 5 5 5-5" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 21h14" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                <h3>Exporte pra onde quiser</h3>
+                <p>Resultados em Excel; agenda de prazos em .ics pro Google, Outlook ou Apple.</p>
+              </div>
+              <div className="feature">
+                <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 7l1 12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1l1-12M4 7l1-3h14l1 3" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <h3>Arquive</h3>
+                <p>Tira do radar sem apagar o histórico.</p>
               </div>
             </div>
           </div>
