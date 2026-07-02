@@ -4,6 +4,7 @@ import { Icon } from '../../components/Icon'
 import { useFavoritosStore } from '../../stores/favoritosStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
+import { useNavStore } from '../../stores/navStore'
 import { createNotificacao } from '../../lib/notificacoes'
 import type { LicitacaoItem, ItemStatus, FaseStatus } from '../../types'
 import { cn } from '../../lib/utils'
@@ -1331,6 +1332,35 @@ export function TrackingPage() {
     el.classList.add('ring-2', 'ring-indigo-400')
     setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-400'), 1600)
   }
+
+  // Foco vindo do sino de notificações: garante que o card esteja visível
+  // (view lista, sem filtro/busca) e rola até ele, com algumas tentativas
+  // enquanto a lista renderiza. Depois limpa o pedido.
+  const focusCard = useNavStore((s) => s.focusTrackingCard)
+  const clearFocus = useNavStore((s) => s.clearTrackingCard)
+  useEffect(() => {
+    if (!focusCard) return
+    setView('list')
+    setFilterMode('all')
+    setSearch('')
+    let tries = 0
+    let timer: ReturnType<typeof setTimeout>
+    const attempt = () => {
+      const el = document.getElementById('card-' + focusCard)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('ring-2', 'ring-indigo-400')
+        setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-400'), 1600)
+        clearFocus()
+      } else if (tries++ < 20) {
+        timer = setTimeout(attempt, 100)
+      } else {
+        clearFocus()
+      }
+    }
+    timer = setTimeout(attempt, 60)
+    return () => clearTimeout(timer)
+  }, [focusCard, clearFocus])
   // Muda o status e, quando a fase muda, alerta o colaborador responsável (in-app).
   const updateStatus = (id: string, patch: Partial<ItemStatus>) => {
     const prevFase = statuses[id]?.fase

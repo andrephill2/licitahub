@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Icon } from './Icon'
 import { useNotificacoesStore } from '../stores/notificacoesStore'
+import { useNavStore } from '../stores/navStore'
 import { checkPrazoNotificacoes } from '../lib/prazoNotificacoes'
 import { cn } from '../lib/utils'
 
@@ -19,9 +20,18 @@ function tempoRelativo(iso: string): string {
 
 export function NotificacoesBell() {
   const { items, load, markRead, markAllRead } = useNotificacoesStore()
+  const goToTrackingCard = useNavStore((s) => s.goToTrackingCard)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const unread = items.filter((n) => !n.read).length
+
+  const handleClick = (n: { id: string; item_id: string | null }) => {
+    markRead(n.id)
+    if (n.item_id) {
+      goToTrackingCard(n.item_id)
+      setOpen(false)
+    }
+  }
 
   useEffect(() => {
     // Antes de carregar, gera alertas de prazo dos favoritos (impugnação < 3 dias,
@@ -70,7 +80,7 @@ export function NotificacoesBell() {
               {items.map((n) => (
                 <li
                   key={n.id}
-                  onClick={() => markRead(n.id)}
+                  onClick={() => handleClick(n)}
                   className={cn(
                     'px-4 py-2.5 border-b border-slate-50 dark:border-slate-800/60 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors',
                     !n.read && 'bg-indigo-50/50 dark:bg-indigo-900/10'
@@ -84,6 +94,11 @@ export function NotificacoesBell() {
                         <span className="text-[9px] text-slate-400 shrink-0">{tempoRelativo(n.created_at)}</span>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">{n.body}</p>
+                      {n.item_id && (
+                        <p className="mt-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-0.5">
+                          Ir para o card <Icon name="arrowRight" className="h-3 w-3" />
+                        </p>
+                      )}
                     </div>
                   </div>
                 </li>

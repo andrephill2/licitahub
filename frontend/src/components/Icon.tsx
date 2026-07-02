@@ -7,7 +7,7 @@ import {
   Clock, SlidersHorizontal, Trash2, Archive, Settings, Download, Check,
   ShieldCheck, Building2, MapPin, FileText, RefreshCw, Plus, X, LogIn,
   User, TrendingUp, LayoutDashboard, AlertTriangle, Target, Database,
-  Users, Share2, Volume2, VolumeX, BookOpen, Sparkles, Radar,
+  Users, Share2, Volume2, VolumeX, BookOpen, Sparkles, Radar, ArrowRight,
 } from 'lucide-react'
 
 const ICONS = {
@@ -49,6 +49,7 @@ const ICONS = {
   book: BookOpen,
   sparkles: Sparkles,
   radar: Radar,
+  arrowRight: ArrowRight,
 } satisfies Record<string, LucideIcon>
 
 interface IconProps {

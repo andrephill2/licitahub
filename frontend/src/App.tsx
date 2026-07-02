@@ -18,6 +18,7 @@ import { useAuthStore } from './stores/authStore'
 import { useFavoritosStore } from './stores/favoritosStore'
 import { useTabsStore } from './stores/tabsStore'
 import { useTeamStore } from './stores/teamStore'
+import { useNavStore } from './stores/navStore'
 import { loadSavedSearches } from './lib/savedSearches'
 import { runSearch } from './lib/searchApi'
 import { clearPncpCache } from './lib/pncpCache'
@@ -37,6 +38,13 @@ function DashboardShell() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [view])
+
+  // Clique numa notificação do sino pede um card de Acompanhamento — troca
+  // para essa aba; o TrackingPage cuida de rolar/destacar o card.
+  const focusTrackingCard = useNavStore((s) => s.focusTrackingCard)
+  useEffect(() => {
+    if (focusTrackingCard) setView('tracking')
+  }, [focusTrackingCard])
   const { syncFromDB } = useFavoritosStore()
   const { loadTeam, teamSearches, reset: resetTeam } = useTeamStore()
   const openedTeamKeywords = useRef<Set<string>>(new Set())
