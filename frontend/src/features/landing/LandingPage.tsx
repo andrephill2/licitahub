@@ -165,17 +165,57 @@ export function LandingPage() {
 
         <hr className="divider" />
 
+        <section id="telas">
+          <div className="wrap">
+            <div className="section-head">
+              <span className="eyebrow">Por dentro</span>
+              <h2>O sistema, de verdade.</h2>
+              <p>Não é mockup. São telas reais do Licitrend em uso.</p>
+            </div>
+            <div className="shot-frame">
+              <img src="/screens/busca.png" alt="Busca de editais multi-fonte no Licitrend" loading="lazy" />
+            </div>
+            <p className="shot-cap">Busca de editais — PNCP, Compras.gov.br, Portal de Compras Públicas e mais, numa tela só.</p>
+            <div className="shot-grid">
+              <div>
+                <div className="shot-frame">
+                  <img src="/screens/painel.png" alt="Painel de Controle do Licitrend com indicadores" loading="lazy" />
+                </div>
+                <p className="shot-cap">Painel de Controle — buscas, favoritos, prazos e pipeline num relance.</p>
+              </div>
+              <div>
+                <div className="shot-frame">
+                  <img src="/screens/concorrentes.png" alt="Análise de concorrentes por CNPJ no Licitrend" loading="lazy" />
+                </div>
+                <p className="shot-cap">Análise de concorrentes — risco de inabilitação, sanções e vínculos por CNPJ.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <hr className="divider" />
+
         <section id="recursos">
           <div className="wrap">
             <div className="section-head">
               <span className="eyebrow">Recursos</span>
               <h2>O que te coloca na frente.</h2>
             </div>
+            <div className="source-strip">
+              <span className="source-label">Buscamos pra você em</span>
+              <span className="source-chip">PNCP</span>
+              <span className="source-chip">Compras.gov.br</span>
+              <span className="source-chip">Portal de Compras Públicas</span>
+              <span className="source-chip">Licitar Digital</span>
+              <span className="source-chip">Diários Oficiais</span>
+              <span className="source-chip">PNUD</span>
+              <span className="source-chip">SESC</span>
+            </div>
             <div className="features-grid">
               <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#C9B6FF" strokeWidth="1.6"/><path d="m20 20-3.6-3.6" stroke="#C9B6FF" strokeWidth="1.6" strokeLinecap="round"/></svg>
                 <h3>Busca em todas as fontes</h3>
-                <p>Pesquisa PNCP e ComprasGov ao mesmo tempo. Uma busca, tudo junto.</p>
+                <p>PNCP, Compras.gov.br, Portal de Compras Públicas, Licitar Digital, diários oficiais e mais — uma busca só.</p>
               </div>
               <div className="feature">
                 <svg className="ficon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M6 12h12M10 18h4" stroke="#FF7A59" strokeWidth="1.6" strokeLinecap="round"/></svg>
@@ -254,19 +294,8 @@ export function LandingPage() {
                 <span><span className="leg-dot" style={{background:'var(--violet-soft)'}}></span> Em acompanhamento</span>
               </div>
             </div>
-            <div className="cal-card">
-              <div className="cal-head">
-                <span>Julho 2026</span>
-                <span>4 prazos este mês</span>
-              </div>
-              <div className="cal-grid">
-                <div className="cal-dow">D</div><div className="cal-dow">S</div><div className="cal-dow">T</div><div className="cal-dow">Q</div><div className="cal-dow">Q</div><div className="cal-dow">S</div><div className="cal-dow">S</div>
-                <div className="cal-cell empty"></div><div className="cal-cell empty"></div><div className="cal-cell">1</div><div className="cal-cell">2</div><div className="cal-cell">3</div><div className="cal-cell track">4<span className="dot"></span></div><div className="cal-cell">5</div>
-                <div className="cal-cell">6</div><div className="cal-cell">7</div><div className="cal-cell">8</div><div className="cal-cell fav">9<span className="dot"></span></div><div className="cal-cell">10</div><div className="cal-cell">11</div><div className="cal-cell">12</div>
-                <div className="cal-cell">13</div><div className="cal-cell track">14<span className="dot"></span></div><div className="cal-cell">15</div><div className="cal-cell">16</div><div className="cal-cell">17</div><div className="cal-cell">18</div><div className="cal-cell">19</div>
-                <div className="cal-cell">20</div><div className="cal-cell">21</div><div className="cal-cell">22</div><div className="cal-cell fav">23<span className="dot"></span></div><div className="cal-cell">24</div><div className="cal-cell">25</div><div className="cal-cell">26</div>
-                <div className="cal-cell">27</div><div className="cal-cell">28</div><div className="cal-cell">29</div><div className="cal-cell">30</div><div className="cal-cell">31</div><div className="cal-cell empty"></div><div className="cal-cell empty"></div>
-              </div>
+            <div className="shot-frame">
+              <img src="/screens/calendario.png" alt="Calendário de prazos do Licitrend" loading="lazy" />
             </div>
           </div>
         </section>
@@ -280,10 +309,10 @@ export function LandingPage() {
               <h2>Acompanhe até o resultado.</h2>
               <p>Veja em que pé tá cada licitação, de relance. Trabalhe com o seu time, compartilhe — ou não — cada acompanhamento, e receba alertas das movimentações importantes.</p>
             </div>
-            <div className="photo-banner photo-frame">
-              <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1600&q=80" alt="Equipe acompanhando o andamento das licitações juntos" />
-              <span className="caption">Sua equipe, sempre alinhada sobre onde cada licitação está.</span>
+            <div className="shot-frame">
+              <img src="/screens/acompanhamento.png" alt="Painel de acompanhamento do Licitrend com a agenda de prazos legais" loading="lazy" />
             </div>
+            <p className="shot-cap">Agenda de prazos legais — impugnação, sessão e recurso calculados em dias úteis.</p>
             <div className="kanban">
               <div className="kan-col">
                 <h4>Triagem <span>2</span></h4>
