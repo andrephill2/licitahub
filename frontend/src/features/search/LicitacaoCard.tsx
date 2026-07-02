@@ -1,10 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '../../components/Icon'
-import { formatCurrency } from '../../lib/utils'
+import { formatCurrency, cn } from '../../lib/utils'
 import type { LicitacaoItem } from '../../types'
 import { useFavoritosStore } from '../../stores/favoritosStore'
 
-const valorCache = new Map<string, number>()
+// Cache de valores do PNCP persistido em localStorage: uma vez puxado, aparece
+// na hora nas próximas visitas. Revalidado em 2º plano quando fica velho (TTL).
+const VALOR_LS_KEY = 'lh-pncp-valores'
+const VALOR_TTL = 12 * 60 * 60 * 1000 // 12h para revalidar em segundo plano
+interface ValorEntry { v: number; ts: number }
+const valorCache = new Map<string, ValorEntry>()
+try {
+  const raw = JSON.parse(localStorage.getItem(VALOR_LS_KEY) || '{}') as Record<string, ValorEntry>
+  for (const [k, e] of Object.entries(raw)) {
+    if (e && typeof e.v === 'number' && typeof e.ts === 'number') valorCache.set(k, e)
+  }
+} catch { /* localStorage indisponível/corrompido — ignora */ }
+
+function persistValor(id: string, v: number) {
+  valorCache.set(id, { v, ts: Date.now() })
+  try {
+    const obj: Record<string, ValorEntry> = {}
+    valorCache.forEach((e, k) => { obj[k] = e })
+    localStorage.setItem(VALOR_LS_KEY, JSON.stringify(obj))
+  } catch { /* quota excedida — mantém só em memória */ }
+}
 
 interface PncpArq { tituloDocumento?: string; tipoDocumentoNome?: string; url?: string; linkArquivo?: string }
 
@@ -66,6 +86,17 @@ const ESFERA_COLORS: Record<string, string> = {
 }
 const UF_COLORS = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
 
+const CAPAG_COLORS: Record<string, string> = {
+  A:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700',
+  B:  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700',
+  C:  'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border border-orange-300 dark:border-orange-700',
+  D:  'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-300 dark:border-red-700',
+  SC: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-600',
+}
+const CAPAG_LABEL: Record<string, string> = {
+  A: 'CAPAG A', B: 'CAPAG B', C: 'CAPAG C', D: 'CAPAG D', SC: 'CAPAG SC',
+}
+
 interface Props {
   item: LicitacaoItem
   isNew?: boolean
@@ -73,49 +104,80 @@ interface Props {
   onArchive?: (item: LicitacaoItem) => void
   isSelected?: boolean
   onToggleSelect?: () => void
+  onDetail?: (item: LicitacaoItem) => void
 }
 
-export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected, onToggleSelect }: Props) {
+export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected, onToggleSelect, onDetail }: Props) {
   const { favoritos, addFavorito, removeFavorito } = useFavoritosStore()
   const isFav = !!favoritos[item.id]
   const [arquivos, setArquivos] = useState<PncpArq[] | null>(null)
   const [loadingArq, setLoadingArq] = useState(false)
   const [showArq, setShowArq] = useState(false)
   const [dynamicValor, setDynamicValor] = useState<number | null>(null)
+  const [valorLoading, setValorLoading] = useState(false)
+  // Incrementado pelo botão "tentar de novo" quando o PNCP não respondeu o valor
+  const [valorRetry, setValorRetry] = useState(0)
 
   useEffect(() => {
     const v = Number(item.valorTotalEstimado) || 0
     if (v > 0 || !item.idContratacaoPncp) return
-    if (valorCache.has(item.idContratacaoPncp)) { setDynamicValor(valorCache.get(item.idContratacaoPncp)!); return }
-    const m = item.idContratacaoPncp.match(/^(\d{14})-[^-]+-(\d+)\/(\d{4})$/)
+    const id = item.idContratacaoPncp
+    const cached = valorCache.get(id)
+    if (cached) setDynamicValor(cached.v) // mostra na hora o que já foi puxado antes
+    // Já temos valor recente: não revalida (rápido e poupa a API do PNCP).
+    if (cached && Date.now() - cached.ts < VALOR_TTL) return
+    const m = id.match(/^(\d{14})-[^-]+-(\d+)\/(\d{4})$/)
     if (!m) return
     const [, cnpj, seqStr, ano] = m
     const seq = parseInt(seqStr, 10)
-    let cancelled = false
-    const tryFetch = async (u: string) => { try { const r = await fetch(u, { headers: { Accept: 'application/json' } }); if (r.ok) return await r.json() } catch { /* */ } return null }
 
-    // 1) Busca a contratação diretamente — tem valorTotalEstimado garantido
-    const proxyContratacao = `/api/pncp?path=${encodeURIComponent(`orgaos/${cnpj}/compras/${ano}/${seq}`)}`
-    const directContratacao = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}`
-    Promise.any([tryFetch(proxyContratacao), tryFetch(directContratacao)].map(p => Promise.resolve(p).then(v => v ?? Promise.reject())))
-      .then((data) => {
-        if (cancelled) return
-        const val = Number((data as Record<string, unknown>)?.valorTotalEstimado || 0)
-        if (val > 0) { valorCache.set(item.idContratacaoPncp!, val); setDynamicValor(val); return }
-        // 2) Fallback: calcula a partir dos itens
-        const proxyItens = `/api/pncp?path=${encodeURIComponent(`orgaos/${cnpj}/compras/${ano}/${seq}/itens`)}`
-        const directItens = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`
-        return Promise.any([tryFetch(proxyItens), tryFetch(directItens)].map(p => Promise.resolve(p).then(v => v ?? Promise.reject())))
-          .then((rows) => {
-            if (cancelled) return
-            const list = Array.isArray(rows) ? rows : ((rows as Record<string, unknown>)?.data as unknown[] || [])
-            const total = (list as Record<string, unknown>[]).reduce((s, i) => s + (Number(i.quantidade) || 1) * (Number(i.valorUnitarioEstimado) || 0), 0)
-            if (total > 0) { valorCache.set(item.idContratacaoPncp!, total); setDynamicValor(total) }
-          }).catch(() => {})
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [item.id, item.idContratacaoPncp, item.valorTotalEstimado])
+    const ctrl = new AbortController()
+    const sig = ctrl.signal
+    let done = false
+
+    // Corre proxy (consulta/v1) + direto consulta/v1 + allorigins; o 1º a responder vence.
+    // PNCP migrou o detalhe de /pncp/v1/ para /consulta/v1/ — o antigo agora só devolve 301.
+    const race = (path: string): Promise<Record<string, unknown> | unknown[] | null> => {
+      const consultaUrl = `https://pncp.gov.br/api/consulta/v1/${path}`
+      const get = (u: string) => fetch(u, { headers: { Accept: 'application/json' }, signal: sig }).then((r) => (r.ok ? r.json() : Promise.reject()))
+      const proxy = get(`/api/pncp?path=${encodeURIComponent(path)}`)
+      const direct = get(consultaUrl)
+      const allorigins = fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(consultaUrl)}`, { signal: sig })
+        .then(async (r) => { if (!r.ok) return Promise.reject(); const d = await r.json() as { contents?: string }; if (!d.contents) return Promise.reject(); return JSON.parse(d.contents) })
+      return Promise.any([proxy, direct, allorigins]).catch(() => null)
+    }
+
+    const finish = (val: number | null) => {
+      if (done) return
+      done = true
+      ctrl.abort()
+      if (val && val > 0) { persistValor(id, val); setDynamicValor(val) }
+      setValorLoading(false)
+    }
+
+    // Só mostra "buscando valor..." quando não havia nada em cache para exibir;
+    // quando há, a reconferência acontece silenciosamente em segundo plano.
+    if (!cached) setValorLoading(true)
+    // Timeout de segurança: não deixa o card preso em "buscando valor..." se o PNCP não responder.
+    const timer = setTimeout(() => finish(null), 15000)
+
+    ;(async () => {
+      // 1) Contratação — valorTotalEstimado garantido
+      const data = await race(`orgaos/${cnpj}/compras/${ano}/${seq}`) as Record<string, unknown> | null
+      if (done) return
+      const val = Number(data?.valorTotalEstimado || 0)
+      if (val > 0) { clearTimeout(timer); return finish(val) }
+      // 2) Fallback: soma a partir dos itens
+      const rows = await race(`orgaos/${cnpj}/compras/${ano}/${seq}/itens`)
+      if (done) return
+      clearTimeout(timer)
+      const list = Array.isArray(rows) ? rows : ((rows as Record<string, unknown>)?.data as unknown[] || [])
+      const total = (list as Record<string, unknown>[]).reduce((s, i) => s + (Number(i.quantidade) || 1) * (Number(i.valorUnitarioEstimado) || 0), 0)
+      finish(total > 0 ? total : null)
+    })()
+
+    return () => { done = true; clearTimeout(timer); ctrl.abort() }
+  }, [item.id, item.idContratacaoPncp, item.valorTotalEstimado, valorRetry])
 
   async function toggleArquivos() {
     if (!item.idContratacaoPncp) return
@@ -151,15 +213,26 @@ export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected
   })()
 
   return (
-    <div className={`relative bg-white/95 dark:bg-slate-900/90 backdrop-blur rounded-2xl border transition-all hover:shadow-lg flex flex-col
-      ${isNew ? 'border-green-400 dark:border-green-500 shadow-lg shadow-green-500/20' : 'border-slate-200/60 dark:border-slate-800/60 hover:border-indigo-400'}`}>
+    <div className={cn(
+      'relative bg-white/95 dark:bg-slate-900/90 backdrop-blur rounded-2xl transition-all hover:shadow-lg flex flex-col',
+      isNew
+        ? 'border-2 border-green-400 dark:border-green-500 shadow-xl shadow-green-500/25 ring-2 ring-green-300/60 ring-offset-2 dark:ring-green-600/40 dark:ring-offset-slate-900 animate-pulse hover:animate-none'
+        : 'border border-slate-200/60 dark:border-slate-800/60 hover:border-indigo-400'
+    )}>
 
       {/* Radar new indicator */}
       {isNew && (
-        <div className="absolute top-0 right-0 flex items-center gap-1 bg-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-tr-2xl rounded-bl-xl shadow-sm z-10" title="Novidade encontrada pelo Radar!">
-          <Icon name="target" className="h-3.5 w-3.5" />
-          RADAR
-        </div>
+        <>
+          <div className="absolute top-0 right-0 flex items-center gap-1.5 bg-green-500 text-white text-[10px] font-black px-3 py-1.5 rounded-tr-2xl rounded-bl-xl shadow-md z-10" title="Novidade encontrada pelo Radar!">
+            <span className="animate-spin inline-flex" style={{ animationDuration: '3s' }}><Icon name="target" className="h-3.5 w-3.5" /></span>
+            NOVA OPORTUNIDADE
+            <span className="absolute -top-1 -left-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+            </span>
+          </div>
+          <div className="absolute inset-0 rounded-2xl pointer-events-none bg-gradient-to-br from-green-400/5 to-transparent dark:from-green-500/8" />
+        </>
       )}
 
       <div className="p-4 flex-1 flex flex-col gap-2">
@@ -221,17 +294,31 @@ export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected
         )}
 
         {/* Objeto com keyword highlight */}
-        <p className="text-sm text-slate-700 dark:text-slate-200 line-clamp-3 leading-relaxed text-justify flex-1">
+        <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed text-justify flex-1 font-ebook">
           {highlightKeyword(item.objetoCompra || 'Sem descrição', keyword)}
         </p>
 
-        {/* UF + Esfera */}
-        <div className="flex flex-wrap gap-1.5">
-          {item.uf && (
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${UF_COLORS}`}>{item.uf}</span>
+        {/* Localização + Esfera + CAPAG */}
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {/* Localização: município + UF juntos */}
+          {(item.municipio || item.uf) && (
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${UF_COLORS}`}>
+              <svg className="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+              {item.municipio && item.uf
+                ? `${item.municipio} / ${item.uf}`
+                : item.municipio || item.uf}
+            </span>
           )}
           {esfera && (
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${ESFERA_COLORS[esfera] || 'bg-slate-100 text-slate-600'}`}>{esfera}</span>
+          )}
+          {item.capagNota && CAPAG_COLORS[item.capagNota] && (
+            <span
+              className={`text-[11px] font-black px-2 py-0.5 rounded-full ${CAPAG_COLORS[item.capagNota]}`}
+              title={`Capacidade de Pagamento do município (CAPAG ${item.capagNota})`}
+            >
+              {CAPAG_LABEL[item.capagNota] ?? `CAPAG ${item.capagNota}`}
+            </span>
           )}
         </div>
 
@@ -328,16 +415,34 @@ export function LicitacaoCard({ item, isNew, keyword = '', onArchive, isSelected
                 {formatCurrency(displayValor)}
                 {dynamicValor !== null && <span className="text-[9px] text-slate-400 font-normal ml-0.5">(itens)</span>}
               </span>
-            ) : valor === 0 && item.idContratacaoPncp ? (
+            ) : valorLoading ? (
               <span className="text-[10px] text-slate-400 animate-pulse">buscando valor...</span>
+            ) : valor === 0 && item.idContratacaoPncp ? (
+              <button
+                onClick={() => setValorRetry((n) => n + 1)}
+                className="text-[10px] text-slate-400 hover:text-indigo-500 transition-colors"
+                title="O PNCP não informou o valor (pode ser sigiloso ou a API não respondeu). Clique para consultar de novo."
+              >
+                valor indisponível ↻
+              </button>
             ) : null}
           </div>
-          {item.linkSistemaOrigem && (
-            <a href={item.linkSistemaOrigem} target="_blank" rel="noopener noreferrer"
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 shrink-0">
-              Acessar <Icon name="trending" className="h-3 w-3" />
-            </a>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {onDetail && (
+              <button
+                onClick={() => onDetail(item)}
+                className="text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 flex items-center gap-1"
+              >
+                Detalhes <Icon name="search" className="h-3 w-3" />
+              </button>
+            )}
+            {item.linkSistemaOrigem && (
+              <a href={item.linkSistemaOrigem} target="_blank" rel="noopener noreferrer"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                Acessar <Icon name="trending" className="h-3 w-3" />
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -19,7 +19,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const upstream = await fetch(url, { headers: { Accept: 'application/json' } })
+    let upstream = await fetch(url, { headers: { Accept: 'application/json' } })
+    // Sub-endpoints (itens, arquivos, periodos) de editais sigilosos retornam 404 em consulta/v1
+    // mas funcionam em pncp/v1 — tenta fallback automático
+    if (upstream.status === 404 && url.includes('/consulta/v1/')) {
+      const fallback = await fetch(url.replace('/consulta/v1/', '/pncp/v1/'), { headers: { Accept: 'application/json' } })
+      if (fallback.ok) upstream = fallback
+    }
     const body = await upstream.text()
     res.status(upstream.status).setHeader('Content-Type', 'application/json').send(body)
   } catch (e) {

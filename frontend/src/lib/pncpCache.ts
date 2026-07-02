@@ -4,6 +4,7 @@ export interface PncpItemRow {
   quantidade: number
   unidadeMedida: string
   valorUnitarioEstimado: number
+  orcamentoSigiloso?: boolean
 }
 
 export interface PncpArquivo {
@@ -51,11 +52,33 @@ interface CacheEntry {
   ts: number
 }
 
-const TTL = 30 * 60 * 1000 // 30 minutos
+const TTL = 30 * 60 * 1000               // fresco: usa direto, sem rede
+const HARD_TTL = 7 * 24 * 60 * 60 * 1000 // além disso, descarta o registro
+const LS_KEY = 'lh-pncp-detail-cache'
+const MAX_ENTRIES = 80                   // limita o tamanho no localStorage
+
+// Cache persistido em localStorage: após um reload a Agenda de Prazos e o
+// Kanban abrem instantâneos com os dados da última visita (stale-while-
+// revalidate — o dado antigo aparece na hora e a revalidação roda em fundo).
 const cache = new Map<string, CacheEntry>()
+try {
+  const raw = JSON.parse(localStorage.getItem(LS_KEY) || '{}') as Record<string, CacheEntry>
+  const now = Date.now()
+  for (const [k, e] of Object.entries(raw)) {
+    if (e && e.data && typeof e.ts === 'number' && now - e.ts < HARD_TTL) cache.set(k, e)
+  }
+} catch { /* localStorage indisponível/corrompido — segue só em memória */ }
+
+function persistCache() {
+  try {
+    const entries = [...cache.entries()].sort((a, b) => b[1].ts - a[1].ts).slice(0, MAX_ENTRIES)
+    localStorage.setItem(LS_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch { /* quota excedida — mantém só em memória */ }
+}
 
 export function clearPncpCache() {
   cache.clear()
+  try { localStorage.removeItem(LS_KEY) } catch { /* no-op */ }
 }
 
 function fdt(v: unknown): string {
@@ -85,6 +108,13 @@ async function pncpRace(url: string): Promise<unknown> {
   const direct = fetch(url, { headers: { Accept: 'application/json' }, signal: sig })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
 
+  // Sub-endpoints de editais sigilosos retornam 404 em consulta/v1 mas funcionam em pncp/v1
+  const pncpV1Url = url.replace('/api/consulta/v1/', '/api/pncp/v1/')
+  const directV1 = pncpV1Url !== url
+    ? fetch(pncpV1Url, { headers: { Accept: 'application/json' }, signal: sig })
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+    : Promise.reject('same')
+
   const path = url.replace('https://pncp.gov.br/api/consulta/v1/', '').replace('https://pncp.gov.br/api/pncp/v1/', '')
   const proxy = fetch(`/api/pncp?path=${encodeURIComponent(path)}`, { headers: { Accept: 'application/json' }, signal: sig })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -100,7 +130,7 @@ async function pncpRace(url: string): Promise<unknown> {
     })
 
   try {
-    const result = await Promise.any([direct, proxy, allorigins])
+    const result = await Promise.any([direct, directV1, proxy, allorigins])
     ctrl.abort()
     return result
   } catch {
@@ -108,10 +138,31 @@ async function pncpRace(url: string): Promise<unknown> {
   }
 }
 
+// Revalidações em andamento (evita disparar a mesma consulta em paralelo)
+const inflight = new Map<string, Promise<Partial<PncpDetail>>>()
+
 export async function fetchPncpDetail(idContratacaoPncp: string): Promise<Partial<PncpDetail>> {
   const entry = cache.get(idContratacaoPncp)
   if (entry && Date.now() - entry.ts < TTL) return entry.data
 
+  // Stale-while-revalidate: dado velho volta NA HORA e a atualização roda em fundo
+  if (entry) {
+    if (!inflight.has(idContratacaoPncp)) {
+      const p = doFetchPncpDetail(idContratacaoPncp).finally(() => inflight.delete(idContratacaoPncp))
+      inflight.set(idContratacaoPncp, p)
+      p.catch(() => {})
+    }
+    return entry.data
+  }
+
+  const existing = inflight.get(idContratacaoPncp)
+  if (existing) return existing
+  const p = doFetchPncpDetail(idContratacaoPncp).finally(() => inflight.delete(idContratacaoPncp))
+  inflight.set(idContratacaoPncp, p)
+  return p
+}
+
+async function doFetchPncpDetail(idContratacaoPncp: string): Promise<Partial<PncpDetail>> {
   const ids = parsePncpId(idContratacaoPncp)
   if (!ids) return {}
   const { cnpj, ano, seq } = ids
@@ -198,6 +249,7 @@ export async function fetchPncpDetail(idContratacaoPncp: string): Promise<Partia
       quantidade: Number(i.quantidade || 0),
       unidadeMedida: String(i.unidadeMedida || i.unidade || 'UN'),
       valorUnitarioEstimado: Number(i.valorUnitarioEstimado || i.valorUnitario || 0),
+      orcamentoSigiloso: !!i.orcamentoSigiloso,
     }))
   }
 
@@ -210,6 +262,12 @@ export async function fetchPncpDetail(idContratacaoPncp: string): Promise<Partia
     }))
   }
 
+  // Falha total de rede: não sobrescreve um cache antigo válido com objeto vazio
+  const isEmpty = Object.keys(result).length === 0
+  const prev = cache.get(idContratacaoPncp)
+  if (isEmpty && prev) return prev.data
+
   cache.set(idContratacaoPncp, { data: result, ts: Date.now() })
+  persistCache()
   return result
 }
